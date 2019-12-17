@@ -1,0 +1,31 @@
+Name HI-WIRE II
+#
+#  $Workfile:   hiwire.arl  $
+#  $Revision:   1.1  $
+#   $Modtime:   Jan 21 2000 11:37:04  $
+#      $Date:   Jan 21 2000 11:48:00  $
+#     $Owner:   LJ $
+#   $Logfile:   Y:/CAM350/dev/barco.arv  $
+#
+#  Copyright (c) 2000 Advanced CAM Technologies, all rights reserved.
+#
+#***********************************************************
+# This is the WinTek arl file for WinTek's Hi-Wire II system
+
+FILE_EXTENSION apt
+
+VERSION 1
+UNIT INCH
+
+# Shape definitions
+S_ROUND        ROUND
+S_OBLONG       OVAL
+S_SQUARE       SQUARE
+S_RECTANGLE    RECTANGLE
+
+# Line formats:
+FMT_SKIPUNTIL +10 # $skipe
+FMT_ROUND	D$dcode  $xsize $skip $skip $skip $skip $shape $skipe
+FMT_SQUARE	D$dcode  $xsize $skip $ysize $skip $skip $shape $skipe
+FMT_RECTANGLE	D$dcode  $xsize $skip $ysize $skip $skip $shape $skipe
+FMT_OBLONG	D$dcode  $xsize $skip $ysize $skip $skip $shape $skipe

@@ -1,0 +1,32 @@
+NAME ORCAD_3
+#
+#  $Workfile:   orcad3.arl  $
+#  $Revision:   1.1  $
+#   $Modtime:   Jun 05 1998 11:37:06  $
+#      $Date:   Jun 05 1998 11:48:06  $
+#     $Owner:   RN $
+#   $Logfile:   Y:/CAM350/dev/orcad3.arv  $
+#
+#  Copyright (c) 1998 Advanced CAM Technologies, Inc., all rights reserved.
+#
+
+# *******************************************
+# This is the start of the ORCAD Aperture Rule File.
+
+FILE_EXTENSION apr
+
+VERSION 1
+IGNORE_CHAR ,
+UNIT INCH
+
+# Shape definitions:
+S_ROUND		L
+S_ROUND		C
+S_RECTANGLE	R
+S_OBLONG	O
+
+# Line formats:
+FMT_SKIPUNTIL   +1 Ver Hor $skipe
+FMT_ROUND	$ysize  $xsize  $shape  D$dcode
+FMT_RECTANGLE	$ysize  $xsize  $shape  D$dcode
+FMT_OBLONG	$ysize  $xsize  $shape  D$dcode

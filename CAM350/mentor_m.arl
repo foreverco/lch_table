@@ -1,0 +1,28 @@
+NAME MENTOR_M
+#
+#  $Workfile:   mentpr_m.arl  $
+#  $Revision:     $
+#   $Modtime:     $
+#      $Date:     $
+#     $Owner:   RN $
+#   $Logfile:     $
+#
+#  Copyright (c) 1998 Advanced CAM Technologies, Inc., all rights reserved.
+#
+# ***********************************
+# ***********************************
+
+FILE_EXTENSION apt
+
+VERSION 1
+UNIT MM
+
+# Shape definitions:
+S_ROUND        CIRCLE
+S_RECTANGLE    RECTANGLE
+
+# Line formats:
+FMT_SKIPUNTIL  +0 Position $skipe
+FMT_ROUND      $skip $shape $skip $xsize $skip  $skip $skip $skip $dcode $skipe
+FMT_RECTANGLE  $skip $shape $skip $ysize $xsize $skip $skip $skip $dcode $skipe
+FMT_SKIPEOF    Object Painting

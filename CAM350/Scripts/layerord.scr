@@ -1,0 +1,153 @@
+ '
+'  $Workfile:   layerord.scr  $
+'  $Revision:   1.3  $
+'   $Modtime:   Jul 15 1999 11:50:52  $
+'      $Date:   Jul 15 1999 12:07:44  $
+'     $Owner:   RN $
+'   $Logfile:   Y:\CAM350\dev\layerord.scv  $
+'
+'  Copyright (c) 1998 - 2001 Innoveda, Inc., all rights reserved.
+'
+'6//11/99:
+'1. Rewrote code for reordering each layer type to use same subroutine.
+
+' Automatic Layer Reorder macro
+' Adjusts the layers to start with layer #1=Top, etc.
+' Intialize
+Internalspresent = 0
+Negplanespresent = 0
+Posplanespresent = 0
+Graphicspresent = 0
+Del = 750
+
+Print "        Reorder Layer Macro"+CR!+"By Advanced CAM Technologies"
+
+Layer_Renumber@
+
+50
+' Move TOP layer to position #1
+Message$ = "No TOP Layer Present, Macro exits"
+Layertype = 0
+Nextlay = 0
+Gosub 800
+if TypeYes = 0 then goto 700
+
+100
+' Move INTERNAL layers
+Message$ = "No INTERNAL Layers Present"
+Layertype = 1
+Gosub 800
+
+150
+' Move NEGATIVE PLANE Layers
+Message$ = "No NEGATIVE PLANE Layers Present"
+Layertype = 2
+Gosub 800
+
+200
+' Move POSITIVE PLANE Layers
+Message$ = "No POSITIVE PLANE Layers Present"
+Layertype = 14
+Gosub 800
+
+' Move BOTTOM Layer
+Message$ = "No BOTTOM Layer Present, Macro Exits"
+Layertype = 3
+Gosub 800
+if TypeYes = 0 then goto 700
+
+240
+' Move TOP SILK Layer
+Message$ = "No TOP SILKSCREEN Layer Present"
+Layertype = 7
+Gosub 800
+
+250
+' Move BOTTOM SILK Layer
+Message$ = "No BOTTOM SILKSCREEN Layer Present"
+Layertype = 8
+Gosub 800
+
+260
+' Move TOP MASK Layer
+Message$ = "No TOP MASK Layer Present"
+Layertype = 11
+Gosub 800
+
+270
+' Move BOTTOM MASK Layer
+Message$ = "No BOTTOM MASK Layer Present"
+Layertype = 12
+Gosub 800
+
+275
+' Move TOP REF DES Layer
+Message$ = "No TOP REF DES Layer Present"
+Layertype = 16
+Gosub 800
+
+277
+' Move BOTTOM REF DES Layer
+Message$ = "No BOTTOM REF DES Layer Present"
+Layertype = 17
+Gosub 800
+
+280
+' Move TOP PASTE Layer
+Message$ = "No TOP PASTE Layer Present"
+Layertype = 19
+Gosub 800
+
+285
+' Move BOTTOM PASTE Layer
+Message$ = "No BOTTOM PASTE Layer Present"
+Layertype = 20
+Gosub 800
+
+290
+' Move NC DATA Layer
+Message$ = "No NC DATA Layer Present"
+Layertype = 21
+Gosub 800
+
+310
+' Move BORDER Layer
+Message$ = "No BORDER Layer Present"
+Layertype = 6
+Gosub 800
+if TypeYes = 1 then
+	layer_renumber@
+	setlayer@ borderlayer!
+	Edit_Layerreorder@ highestlayer!
+end if
+layer_renumber@
+setlayer@ 0
+
+700
+'Exit Macro
+View_Redraw@
+End@
+print "Macro Exits"
+End
+
+'Subroutines Begin:
+
+800
+' Move Individual Layer
+TypeYes = 0
+For Lay = Nextlay to Highestlayer!
+  Setlayer@ Lay
+  If Layertype = layertype! then
+	TypeYes = 1
+	setlayer@ Lay
+	Edit_Layerreorder@ Nextlay
+	Nextlay = Nextlay + 1
+	end@
+  end if
+Next
+if TypeYes = 0 then
+	Print_Msg Message$
+	Delay Del
+end if
+Return
+

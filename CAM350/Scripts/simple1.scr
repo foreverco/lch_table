@@ -1,0 +1,102 @@
+'
+'  $Workfile:   simple1.scr  $
+'  $Revision:   1.1  $
+'   $Modtime:   May 26 1998 09:44:40  $
+'      $Date:   May 26 1998 15:44:30  $
+'     $Owner:   RN $
+'   $Logfile:   Y:/CAM350/dev/simple1.scv  $
+'
+'  Copyright (c) 1998 - 2001 Innoveda, Inc., all rights reserved.
+'
+' Clear the databse  Filename is SIMPLE1.SCR
+setnewfile@
+
+' Data stored by "Record Settings"
+setdcode@ 11
+setlayer@ 4
+setsectorize@ 0,1000
+textheight@ 50.0000
+textangle@ 0
+textmirror@ 0
+textjust@ 17
+textfitting@ 0
+textcspace@ 0.0000
+textlspace@ 50.0000
+
+' Pan to the center
+view_pan@
+axy@ 0.0000,0.0000
+end@
+
+' Set the grid snap on
+setgridsnap@ 1
+
+' Zoom to a convienent location
+view_window@
+axy@ -350.0000,-250.0000
+axy@ 350.0000,300.0000
+
+' Set the size and shape of Dcodes 10 and 11
+edit_aperture@ 10,1,40.0000,40.0000,10,""
+edit_aperture@ 11,2,40.0000,40.0000,11,""
+update_dcodebar@ 
+
+' Set the grid
+setgrid@ 1,50.0000,50.0000
+
+' Place some flashes on different layers
+setlayer@ 1
+setdcode@ 10
+add_flash@
+axy@ -100.0000,50.0000
+setlayer@ 2
+axy@ -50.0000,50.0000
+setlayer@ 3
+axy@ 0.0000,50.0000
+setlayer@ 4
+axy@ 50.0000,50.0000
+setlayer@ 5
+axy@ 100.0000,50.0000
+setdcode@ 11
+axy@ 100.0000,0.0000
+setlayer@ 4
+axy@ 50.0000,0.0000
+setlayer@ 3
+axy@ 0.0000,0.0000
+setlayer@ 2
+axy@ -50.0000,0.0000
+setlayer@ 1
+axy@ -100.0000,0.0000
+setdcode@ 10
+end@
+
+' Place some lines on different layers
+add_line@
+axy@ -150.0000,100.0000
+axy@ 150.0000,100.0000
+axy@ 150.0000,-50.0000
+axy@ -150.0000,-50.0000
+axy@ -150.0000,100.0000
+back@
+setlayer@ 2
+axy@ -200.0000,150.0000
+axy@ 200.0000,150.0000
+axy@ 200.0000,-100.0000
+axy@ -200.0000,-100.0000
+axy@ -200.0000,150.0000
+back@
+setlayer@ 3
+axy@ -250.0000,200.0000
+axy@ 250.0000,200.0000
+axy@ 250.0000,-150.0000
+axy@ -250.0000,-150.0000
+axy@ -250.0000,200.0000
+back@
+setlayer@ 4
+axy@ -300.0000,250.0000
+axy@ 300.0000,250.0000
+axy@ 300.0000,-200.0000
+axy@ -300.0000,-200.0000
+axy@ -300.0000,250.0000
+back@
+back@

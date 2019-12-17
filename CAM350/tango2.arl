@@ -1,0 +1,34 @@
+NAME  TangoPRO_2
+#
+#  $Workfile:   Tango2.arl  $
+#  $Revision:   1.2  $
+#   $Modtime:   Jul 16 1999 13:42:26  $
+#      $Date:   Jul 19 1999 09:37:32  $
+#     $Owner:   RN $
+#   $Logfile:   Y:\CAM350\dev\Tango2.arv  $
+#
+#  Copyright (c) 1998 Advanced CAM Technologies, Inc., all rights reserved.
+#
+
+# ***********************************
+# This rule file works on TangoPRO dilimited style reports
+
+FILE_EXTENSION apr
+
+VERSION 1
+DELIMITER ,
+IGNORE_CHAR "
+
+# Shape definitions
+S_ROUND        Ellipse
+S_ROUND        Mt
+S_RECTANGLE    Rect
+S_TARGET       Target
+
+# Line formats:
+FMT_SKIPUNTIL +1 Code Shape $skipe
+FMT_ROUND      D$dcode  $shape  $xsize  $skipe
+FMT_ROUND      D$dcode  $shape  $skip   $xsize  $skipe
+FMT_RECTANGLE  D$dcode  $skip   $shape  $xsize  $ysize  $skipe
+FMT_TARGET     D$dcode  $shape  $xsize  $skipe
+FMT_SKIPEOF    Focus

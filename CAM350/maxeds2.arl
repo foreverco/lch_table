@@ -1,0 +1,35 @@
+NAME  MAXEDS_2
+#
+#  $Workfile:   maxeds2.arl  $
+#  $Revision:   1.1  $
+#   $Modtime:   Jun 05 1998 11:37:06  $
+#      $Date:   Jun 05 1998 11:48:04  $
+#     $Owner:   RN $
+#   $Logfile:   Y:/CAM350/dev/maxeds2.arv  $
+#
+#  Copyright (c) 1998 Advanced CAM Technologies, Inc., all rights reserved.
+#
+# *******************************************
+# This rule file works with a MAXEDS version 2 aperture tables.
+
+FILE_EXTENSION fmt
+
+VERSION 1
+UNIT MILS
+IGNORE_CHAR ( )  
+
+# Shape definitions:
+S_ROUND             round
+S_ROUND		    draw
+S_SQUARE            square
+S_RECTANGLE         rectangle
+S_THERMAL           Thermal
+
+# Line formats:
+FMT_SKIPUNTIL +0 Rotate $skipe
+FMT_ROUND      App   D   $dcode   Shape   $shape   $skip   $xsize   $skipe
+FMT_SQUARE     App   D   $dcode   Shape   $shape   $skip   $xsize   $skipe
+FMT_RECTANGLE  App   D   $dcode   Shape   $shape   $skip   $xsize   $skip   $ysize   $skipe
+FMT_THERMAL    App   D   $dcode   Shape   $shape   $skip   $od      $skip   $id      $skipe
+# FMT_CUSTOM     App   D   $dcode   $skip   draw    $skipe
+FMT_SKIP       Angle

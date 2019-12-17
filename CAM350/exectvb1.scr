@@ -1,0 +1,4087 @@
+'
+'  $Workfile:   exectVB1.scr  $
+'  $Revision:   1.0  $
+'   $Modtime:   May 31 2000 18:43:08  $
+'      $Date:   May 31 2000 18:46:08  $
+'     $Owner:   LJ $
+'   $Logfile:   Y:\CAM350\dev\quote.scv  $
+'
+'  Copyright (c) 2000, 2001 Innoveda, Inc., all rights reserved.
+'
+
+'UPDATED 6/26/01 - Laszlo Jakusovszky
+'1. Removed redundant agent file-reading code
+'2. Force values for precision and unit if bad values are passed to script.
+
+'UPDATED 6/20/01 - Laszlo Jakusovszky
+'1. Disabled analyze_data@ switches - no longer needed with faster operation.
+'2. Fixed SMT pitch value display - text is now fitted
+
+'UPDATED 5/30/01 - Laszlo Jakusovszky
+'1. Changed layer information retrieval subroutine to account for breaks in layer order (not add empty
+'	layers).
+'2. Fixed bug - Analyze Data Subroutine - minimum value variables weren't being reset to 0 after 
+'	each subsequent run, resulting in Thermal Annular Ring having same value as normal annular ring,
+'	even if thermal ring didn't exist.
+
+'UPDATED 5/8/01 - Laszlo Jakusovszky
+'1. Fixed bug - MRC report - page 2 was drawn with giant apertures, becoming illegible: apertures 
+'	were being created assuming mils units. If database units were MM, or agent called for MM, dcodes
+'	became giant-sized. Now script assures dcode will be normal size for both units.
+'2. Fixed bug - MRC report - when creating pg 2, wasn't switching units to english before using
+'	recorded coordinates to delete and modify data on page. Result was deletion of entire page
+'	and subsequent placement of text at wrong coordinates. Script now switches units correctly.
+
+'UPDATED 5/4/01 - Laszlo Jakusovszky
+'1. Fixed bug with board extents: subroutine for determining extents was called
+'	before subroutine to find layers. Extents are found using 1) border layer, or 2)
+'	all layers. Borderlayer was coming up empty, so all layers was always being used.
+'2. Changed board extent subroutine to find extents for only electrical layers, if no
+'	border layer is present.
+'3. Fixed bug with MRC report layer #2 not being saved or printed out. Was using invalid variable to
+'	check if Agent being run was MRC.
+'4. Fixed display issue with toolbars: they were being turned on again *after* report or database was 
+'	saved, resulting in a .CAM file with no toolbars turned on.
+'5. Fixed font in 2nd MRC report page - label font was using the Simple style, not Times New Roman.
+
+
+'Turn off tool bars to speed up processing:
+view_toolbar@
+view_statbar@
+view_lyrbar@
+view_SuppressGrphcs@ 1
+
+
+'	GLOBAL VARIABLES:
+
+FilePath$ 	= exepath! + "scripts\"		'Specify directory for saving, deleting, etc. agent files
+GenAgent$ 	= FilePath$ + "*.agt"		'used to preselect agent files in browse windows
+Design$		= dbname!			'specifies design location
+FileLgth%	= len(Design$)	
+FileName$	= left$(Design$,(FileLgth% - 4)) 'find filename without extension
+ReportLgth%	= len(FileName$)
+
+Start%		= 1
+for X = 1 to FileLgth%
+	Line%	= instr(Start%,FileName$,"\")		'determine end of path, without filename
+	if Line% > 0 then
+		Start% = Line% + 1
+		EndLine% = Line%
+	end if
+next
+
+Path$		= left$(FileName$,EndLine%)
+File$		= right$(FileName$,(ReportLgth% - EndLine%))	'find just design name
+ReportName$	= Path$ + CR! + File$
+
+GerbExt$ 	= FileName$+"_report.gbr"	'gerber layer filename for Agent report form
+GerbExt2$	= FileName$+"_report_pg2.gbr"	'gerber layer filename for Agent report form
+
+True%		= 1
+False%		= 0
+Error%		= False%
+
+'Next set are selections for Choice Command in Macro Form
+Choice1%	= 1		
+Choice2%	= 2
+Choice3%	= 3
+
+AgtType$	= CheckAgent$	'set to agent type from calling macro - will be used to verify if
+				'agent types are the same (i.e. user running Quote but agent file is MRC)
+Quote$		= "quote"
+MRC$		= "mrc"
+
+QuoteLgt%	= 16		'Line length of a standard quote agent file
+MRCLgt%		= 118		'Line length of a standard mrc agent file
+AgtLength%	= 0		'selection of either two above, depending on agent used
+
+Title$		= ""		'Form Dialog Box Title text
+
+
+'	-> Layer variables
+
+'		Layer numbers
+Top%		= -1
+Bot%		= -1
+TMask%		= -1
+BMask%		= -1	
+TSilk%		= -1
+BSilk%		= -1	
+PosCheck%	= 0
+NegCheck%	= 0	
+Mill%		= -1
+Border%		= -1
+
+'		Layer counters
+DefCount%	= 0			'# of Non-electrical, but tagged, layers
+ElecLayCount%	= 0			'# of electrical layers in design
+GraphCount%	= 0			'# of graphical layers in design
+IntCount%	= 0			'# of internal layers
+NegCount%	= 0			'# of negative planes
+PosCount%	= 0			'# of positive planes
+PlaneTot%	= 0			'Total # of planes
+
+High%		= highestlayer!		'finds highest layer in design
+Plated%		= drilllayer!		'plated drill layer in design
+MillLay%	= milllayer!		'mill layer in design
+Nets% 		= numnets!		'number of nets in design, if any
+
+ReportLay%	= High% + 1		'layer Report Form will be stored on
+ReportLay2%	= ReportLay% + 1	'layer to use for MRC report
+ReportLay$	= "Report_Layer"
+ReportLay2$	= "Report_Layer_2"
+
+'	Analysis 
+
+
+'	DIMENSION ARRAYS:
+'Due to !Include statement, must verify that arrays haven't been dimensioned already:
+
+'	If Execution script has been run before, do not redimension arrays. Array% variable tracks this 
+'	from the calling script.
+
+if Array% = False% then
+	DIM ContentsExe$(1 to 150)		'Array to read in Agents for EDIT AGENT selection
+
+	'	Arrays for storing multiple layer numbers
+	DIM Neg%(1 to 100)		
+	DIM Pos%(1 to 100)
+	DIM Int%(1 to 100)
+	DIM Drill%(1 to 100)
+
+
+	'	DRC Check arrays	
+	DIM DRCPadLayExe$(1 to 100)	
+	DIM DRCMskLayExe$(1 to 100)	
+	DIM DRCDrlLayExe$(1 to 100)	
+	DIM DRCSpPadLayExe$(1 to 100)	
+	DIM DRCSpDrlLayExe$(1 to 100)	
+	DIM DRCSpTrkLayExe$(1 to 100)
+
+	DIM DrillTable%(1 to 100)
+
+	'	Analysis Checks
+	DIM OnLayer%(1 to 100)
+	
+	'	Quote Report Creation
+	DIM KeyRep$(1 to 100)
+	DIM KeyRepVal$(1 to 100)
+
+	'Set array variable:
+	Array% = True%
+end if
+
+'	CREATE NEW APERTURES
+'Add new apertures for drawing lines:
+
+'Switch Metric units to English, to avoid large apertures
+if units! = 1 then
+	TempUnit$ = "MM"
+	gosub 7250
+end if
+
+'Create apertures	
+Thin% = blankdcode!				'Set a 10 mil round for thinner lines
+edit_aperture@ Thin%,1,10.0000,10.0000,0,""
+update_dcodebar@ 
+
+Thick% = blankdcode!				'Set a 25 mil for thick lines
+edit_aperture@ Thick%,1,25.0000,25.0000,0,""
+update_dcodebar@
+
+'Switch units back to Metric
+if TempUnit$ = "MM" then
+	TempUnit$ = Unit$
+	gosub 7275
+end if
+
+'	CREATE TEXT SETTINGS
+'Set Text values:
+Large%	= 213			'large text
+Medium% = 152			'normal text
+Small%	= 140			'small text
+Tiny%	= 120			'tiny text
+
+Just%	= 4			'set text to center justified
+Left%	= 5			'center-justified text
+
+'Default text settings:
+util_camed@
+setdcode@ Thin%
+setlayer@ ReportLay%
+setsectorize@ 0,1000
+textfullheight@ Medium%
+textangle@ 0
+textmirror@ 0
+textjust@ Left%
+textfitting@ 0
+textcspace@ 0.0000
+textlspace@ 125.0000
+textslant@ 0
+textxscale@ 100
+textvertical@ 0
+textfont@ "SIMPLE.EFN"
+textfontface@ 2,"Times New Roman"
+
+
+'NOTE: DUE TO THE USE OF THE !INCLUDE COMMAND, ALL LABELS MUST BEGIN AFTER THE LARGEST LABEL IN
+'THE CALLING SCRIPT - IN THIS CASE 5000
+
+5000
+'Make sure user has a design loaded
+if dbname! = "" then
+	print "You must load a design before running this agent!"
+	goto 9999
+end if
+
+
+5200
+'SET DATABASE UNITS AND PRECISION
+'	- based on user-entered values in agent file
+
+TempUnit$ = Unit$
+TempPres%= Pres%
+gosub 6300
+
+'Set global variable
+FMT$ = PresFMT$
+
+
+5300
+'RUN AGENT SUBROUTINE
+'	- use agent type specified by file
+
+'Call all subroutines needed for Quote Agent Report
+if AgtType$ = Quote$ then
+	gosub 6350	'Set layer info
+	gosub 6450	'Get board size
+	gosub 6500	'Get Analyze Data results
+	gosub 6550	'Get Drill info
+	gosub 6600	'Get SMT info
+	gosub 6800	'Set Mask layer info
+	gosub 6850	'Set Silk layer info
+	
+	'	Determine Nets in the design
+	NumNets%	= numnets!
+
+	'Create Report  a) read user-defined PCB or b) create generic report
+
+	'Create report layer
+	edit_layer@ ReportLay%,8,8,4,0,ReportLay$
+	setlayer@ ReportLay%
+	layer_alloff@ 1
+	view_redraw@
+
+	if Report$ = "generic" then
+		gosub 7200		'Create generic report
+	else
+		gosub 7400		'Use user-created report
+		NewReport$ = TempReport$
+		gosub 7800		'Merge in newly created report .CAM file
+	end if
+end if
+
+'Call all subroutines needed for MRC Agent Report
+if AgtType$ = MRC$ then
+	gosub 6350	'Set layer info
+	gosub 6450	'Get board size
+	gosub 6500	'Get Analyze Data results
+	gosub 6550	'Get Drill info
+	gosub 6600	'Get SMT info
+	gosub 6800	'Set Mask layer info
+	gosub 6850	'Set Silk layer info
+
+	'	Determine Nets in the design
+	NumNets%	= numnets!
+
+	'Generate Page 1 - same as Quote Report
+	'	Create report layer
+	edit_layer@ ReportLay%,8,8,4,0,ReportLay$
+	setlayer@ ReportLay%
+	layer_alloff@ 1
+	view_redraw@
+
+	gosub 7200		'Create generic report
+
+	'	Run MRC-specific sunroutines
+
+	gosub 8000	'Run Database Analysis commands
+
+	'Verify Units:
+	TempUnit$ = Unit$
+	gosub 7250
+
+	gosub 8500	'Create Generic MRC report
+	gosub 8550	'Add MRC results table
+	gosub 8600	'Add Copper Area table
+	gosub 8700	'Fill out tables
+
+	'Return Units, if necessary:
+	TempUnit$ = Unit$
+	gosub 7275
+
+	gosub 8800	'Display info to user onscreen (if desired)
+	if ViewMRC% = True% then
+		gosub 8850
+	end if
+end if
+
+
+5800
+'SAVE AND PRINT REPORT FORM
+
+'Print the report form
+if PrintOK% = True% then gosub 6650
+
+'Save the report form as a gerber layer or as part of the design,
+'depending on user choice
+
+'Restore tool bars:
+view_toolbar@
+view_statbar@
+view_lyrbar@
+view_SuppressGrphcs@ 0
+view_redraw@
+
+view_all@
+view_redraw@
+
+select case SaveOK%
+
+	case Choice1%			'Save the Gerber Layer
+		gosub 6700
+
+	case Choice2%			'Save the Database
+		gosub 6750
+
+	case Choice3%			'Save both
+
+		gosub 6700
+		gosub 6750
+end select
+
+
+5999
+'End macro
+
+'NOTE: no END statement, due to use of !Include command in calling macro
+goto 9999
+
+
+
+
+
+
+'*****************************************************************************
+'************					      ************************
+'************		BEGIN SUBROUTINES	      ************************
+'************					      ************************
+'*****************************************************************************
+
+
+
+'*****************************************************************************
+'			SHARED SUBROUTINES
+'*****************************************************************************
+
+
+6300
+'************************************************
+'*	   UNITS AND PRECISION SUBROUTINE      	*
+'************************************************
+
+'This subroutine sets the database to the units in the Agent file, as well as formats
+'the precision to use in the output report form (prec. has no affect on tests performed by script)
+
+'Set UNITS:
+
+if TempUnit$ = "MM" then
+	setunit@ 1		'Metric
+	update_dcodebar@ 
+	update_buttonbars@ 
+	setsnap@ 0
+	setresolution@ 100
+	update_dcodebar@
+else
+	setunit@ 0		'Inches
+	update_dcodebar@ 
+	update_buttonbars@ 
+	setsnap@ 0
+	setresolution@ 10
+	update_dcodebar@
+end if
+
+'Set CONVERSION FACTORS:
+Convert#	= 1
+
+select case Unit$
+
+	Case "INCH"
+		Convert# = .001
+		CText$	 = ""+quote!+""
+
+	Case "MM"
+		CText$	 = "mm"
+		Cm$	 = "cm"
+		Cm%	 = 10
+
+	Case "MIL"
+		M%	 = 1000
+		CText$	 = "mil"
+		In$	 = ""+quote!+""
+
+	Case Else	'Treat as mil if not defined
+		M%	 = 1000
+		CText$	 = "mil"
+		In$	 = ""+quote!+""
+	
+end select
+
+'Set DISPLAY PRECISION:
+
+select case TempPres%
+	'case 1
+	'	PresFMT$ = "###"
+	'case 2
+	'	PresFMT$ = "###.#"
+	'case 3
+	'	PresFMT$ = "###.##"
+	case 1 to 4
+		PresFMT$ = "###.###"
+	case 5
+		PresFMT$ = "###.####"
+	case else
+		PresFMT$ = "###.###"
+end select
+
+return
+
+
+
+6350
+'************************************************
+'*	  SET LAYER INFO. SUBROUTINE            *
+'************************************************
+
+'Determines which layers and in what quantity are present in the design.
+'	- makes sure layers are tagged'
+'	- performs other checks as noted in code below
+
+'Use for..next loop to read all layers in design
+'	- use select..case to determine specific layer numbers and increment count variables
+'	- check to make sure layers are tagged
+
+print_msg "CHECKING LAYER INFO"
+
+'Local variables for layertypes:
+TP%	= 0		'Top
+IN%	= 1		'Internal
+NE%	= 2		'Negative Plane
+BT%	= 3		'Bottom
+GR%	= 4		'Graphic
+BR%	= 6		'Border
+ST%	= 7		'Silk Top
+SB%	= 8		'Silk Bottom
+MT%	= 11		'Mask Top
+MB%	= 12		'Mask Bottom
+PP%	= 14		'Positive Plane
+RT%	= 16		'RefDes Top
+RB%	= 17		'RefDes Bottom
+PT%	= 19		'Paste Top
+PB%	= 20		'Paste Bottom
+NC%	= 21		'NC Data
+
+'Set array counter variables:
+V = 0
+X = 0
+Y = 0
+Z = 0
+
+'Set first layer number for use in For..Next loop
+FirstLay% = firstlayer!
+
+'Determine layer types and counts
+For L = 1 to numlayers!
+	
+	if L = 1 then
+		setlayer@ FirstLay%
+		LayNum% = FirstLay%
+		LayType% = layertype!
+	else
+		NextLay% = nextlayer!
+		setlayer@ NextLay%
+		LayNum% = Nextlay%
+		LayType% = layertype!
+	end if
+	
+	'Determine information for each type of layer:
+	Select Case LayType%
+
+		case TP%					'Check Top
+			Top% = LayNum%
+			ElecLayCount% = ElecLayCount% + 1
+
+		case IN%					'Check Internals
+			V = V + 1
+			Int%(V) = LayNum%
+			ElecLayCount% = ElecLayCount% + 1
+			IntCount% = IntCount% + 1
+
+		case NE%					'Check Negative Planes
+			X = X + 1
+			Neg%(X) = LayNum%
+			ElecLayCount% = ElecLayCount% + 1
+			NegCount% = NegCount% + 1
+			NegCheck% = True%
+
+		case BT%					'Check Bottom
+			Bot% = LayNum%
+			ElecLayCount% = ElecLayCount% + 1
+
+		case GR%					'Check Graphic layers
+			GraphCount% = GraphCount% + 1
+
+		case BR%					'Check Border
+			Border% = LayNum%
+			DefCount% = DefCount% + 1
+
+		case ST%					'Check Silk Top
+			TSilk% = LayNum%
+			DefCount% = DefCount% + 1
+
+		case SB%					'Check Silk Bottom
+			BSilk% = LayNum%
+			DefCount% = DefCount% + 1
+
+		case MT%					'Check Mask Top
+			TMask% = LayNum%
+			DefCount% = DefCount% + 1
+
+		case MB%					'Check Mask Bottom
+			BMask% = LayNum%
+			DefCount% = DefCount% + 1
+
+		case PP%					'Check Positive Planes
+			Y = Y + 1
+			Pos%(Y) = LayNum%
+			ElecLayCount% = ElecLayCount% + 1
+			PosCount% = PosCount% + 1
+			PosCheck% = True%
+
+		case RT%					'Check RefDes Top
+			DefCount% = DefCount% + 1
+
+		case RB%					'Check RefDes Bottom
+			DefCount% = DefCount% + 1
+
+				
+		case PT%					'Check Paste Top
+			DefCount% = DefCount% + 1
+
+		case PB%					'Check Paste Bottom
+			DefCount% = DefCount% + 1
+
+		case NC%					'Check NC Data layers			
+			if LayNum% = MillLay% then
+				Mill% = LayNum%
+			else
+				Z = Z + 1
+				Drill%(Z) = LayNum%
+				DrillCount% = Z
+			end if
+	end select
+next
+
+'Determine if design is complete (i.e. has Top or Top & Bottom)
+If Bot% = -1 then
+	if Top% = -1 then Error% = True%
+end if
+
+'Determine total # of planes in the design
+PlaneTot% = NegCount% + PosCount%		
+
+close_msg
+return
+
+
+
+6450
+'************************************************
+'*	    BOARD SIZE SUBROUTINE   	  	*
+'************************************************
+
+'Finds the board extents
+print_msg "FINDING BOARD EXTENTS"
+
+BordX# 		= borderminx!
+BordY#		= borderminy!
+BordX2#		= bordermaxx!
+BordY2#		= bordermaxy!
+
+'	Set layer to border to test extents - if no border exists, check entire database
+
+'	check to see if user has set a one up border first:
+if abs(BordX#) < 56299.212598 then
+	'Get maximum width of artwork, based on one up border
+	BorX# 		= bordermaxx!
+	BorY# 		= bordermaxy!
+	BorMinX# 	= borderminx!
+	BorMinY# 	= borderminy!
+else
+	'otherwise use border layer, if present, or extents of electrical layers only
+	if Border% > -1 then
+		setlayer@ Border%
+		layer_alloff@ 1
+		view_redraw@	
+	else
+		gosub 6475
+		view_redraw@
+	end if
+
+	'Get maximum width of the artwork from the origin to edge of Artwork Border
+	BorX# 		= vismaxx!
+	BorY# 		= vismaxy!
+	BorMinX# 	= visminx!
+	BorMinY# 	= visminy!
+end if
+
+'	Total width for each axis
+BorXTot#	= BorX# - BorMinX#
+BorYTot# 	= BorY# - BorMinY#
+
+close_msg
+return
+
+
+6475
+'************************************************
+'*	    TURN ON LAYERS SUBROUTINE  	  	*
+'************************************************
+
+'Turns on only electrical layer for purpose of finding design extents
+
+L = 0
+
+'Set layers to turn on by type
+'	Top
+if Top% > -1 then
+	L = L + 1
+	OnLayer%(L) = Top%
+end if
+
+'	Bottom
+if Bot% > -1 then
+	L = L + 1
+	OnLayer%(L) = Bot%
+end if 
+
+' 	Internal layers
+if IntCount% > 0 then
+	for Lay = 1 to IntCount%
+		L = L + 1
+		OnLayer%(L) = Int%(Lay)
+	next
+end if
+
+'	Negative planes
+if NegCount% > 0 then
+	for Lay = 1 to NegCount%
+		L = L + 1
+		OnLayer%(L) = Neg%(Lay)
+	next
+end if
+
+'	Positive planes
+if PosCount% > 0 then
+	for Lay = 1 to PosCount%
+		L = L + 1
+		OnLayer%(L) = Pos%(Lay)
+	next
+end if
+
+'Turn on these layers:
+G = L
+gosub 6530 
+
+return
+
+
+6500
+'************************************************
+'*	ANALYSIS QUERIES SUBROUTINE   	        *
+'************************************************
+
+'Determines certain design minimums, such as min. trace, min. pitch for SMTs, etc.
+'	- for MRC agents, checks will be run on internal layers only
+'	- for Quote agents, checks will be run on internals, and on layers user
+'	  has selected in agent file
+'	- use an array to track only which layers need to be turned on
+
+'Local Variables:
+IntOK%	= False%
+TopOK%	= False%
+BotOK%	= False%
+PlaneOK%= False%
+
+'	Determine layers to check:
+'		- values retrieved from agent file
+if IntChk% = True% then IntOK% = True%
+if TopChk% = True% then TopOK% = True%
+if BotChk% = True% then BotOK% = True%
+if PlaneChk% = True% then PlaneOK% = True%
+
+
+'1) run netlist extract, if needed
+if Nets% = False% then
+	print_msg "EXTRACTING NETLIST"
+	layerset_setThruDrill@ Plated%
+	netextract3@ 0,0,0,2
+end if
+
+print_msg "ANALYZING DATABASE"
+
+'2) Check Internal layers only
+'	- determine all minimums except SMT
+'	- use array and subroutine to turn on only internal layers
+
+L = 0
+
+'	Turn on drill layer
+if DrillCount% > 0 then
+	L = L + 1
+	OnLayer%(L) = Plated%
+end if
+	
+'	Turn on Internals
+if IntOK% = True% then
+	if IntCount% > 0 then
+		for Lay = 1 to IntCount%
+			L = L + 1
+			OnLayer%(L) = Int%(Lay)
+		next
+
+		'	Turn on these layers
+		G = L
+		gosub 6530
+
+		'	Analyze these layers - turn off unnecessary tests
+		SMTOn% 		= False%
+		AirOn% 		= True%		'****** 1/30/01 turned ON air gap test
+		DrillOn%	= True%
+		gosub 6520
+
+		'	Retrieve Values
+		MintraceInt# 	= TempMintrace#		'smallest trace
+		MinclearInt#	= TempMinclear#		'smallest air gap
+		MinringInt#	= TempMinring#		'smallest annular ring
+		TightInt#	= TempTight#		'tighest drill to trace
+
+		'		These two values aren't used in generic form, but may be used in "custom" forms:
+		Mindrill#	= TempMindrill#		'smallest drill size
+		MinPadInt#	= TempMinPad#		'smallest pad size
+	end if
+end if
+
+
+'3) Check all Other layers
+
+L = 0
+
+'	Turn on drill layer
+if DrillCount% > 0 then
+	L = L + 1
+	OnLayer%(L) = Plated%
+end if
+
+'	Turn on Top
+if TopOK% = True% then
+	L = L + 1
+	OnLayer%(L) = Top%
+end if
+
+'	Turn on Bottom
+if BotOK% = True% then
+	L = L + 1
+	OnLayer%(L) = Bot%
+end if 
+
+'	Turn on Planes - negative and positive
+if PlaneOK% = True% then
+	if NegCount% > 0 then
+		for Lay = 1 to NegCount%
+			L = L + 1
+			OnLayer%(L) = Neg%(Lay)
+		next
+	end if
+	if PosCount% > 0 then
+		for Lay = 1 to PosCount%
+			L = L + 1
+			OnLayer%(L) = Pos%(Lay)
+		next
+	end if
+end if	
+
+'Turn on the layers:
+G = L
+gosub 6530
+
+'Analyze these layers"
+SMTOn% 		= False%
+AirOn% 		= True%			'****** 1/30/01 turned ON air gap test	
+DrillOn%	= True%
+gosub 6520
+
+'	Retrieve Values
+Mintrace# 	= TempMintrace#		'smallest trace
+Minclear#	= TempMinclear#		'smallest air gap
+Minring#	= TempMinring#		'smallest annular ring
+Tight#		= TempTight#		'tighest drill to trace
+
+'		These two values aren't used in generic form, but may be used in "custom" forms:
+Mindrill#	= TempMindrill#		'smallest drill size
+MinPad#		= TempMinPad#		'smallest pad size
+
+
+
+'4) Find Smallest Thermal Annular ring:
+'	- turn on only negative planes for this check
+
+L = 0
+
+'	Turn on drill layer
+if DrillCount% > 0 then
+	L = L + 1
+	OnLayer%(L) = Plated%
+end if
+
+
+if NegCount% > 0 then
+	for Lay = 1 to NegCount%
+		L = L + 1
+		OnLayer%(L) = Neg%(Lay)
+	next
+end if
+if PosCount% > 0 then
+	for Lay = 1 to PosCount%
+		L = L + 1
+		OnLayer%(L) = Pos%(Lay)
+	next
+end if
+
+'Turn on these layers:
+G = L
+gosub 6530
+
+'Analyze these layers:
+SMTOn% 		= False%
+AirOn% 		= False%
+DrillOn%	= False%
+gosub 6520
+
+MinthrmRing#	= TempMinring#
+
+
+'5) Determine Tighest Drill to Trace:
+
+if Tight# > TightInt# then Tight# = TightInt#
+
+close_msg
+return
+
+
+6520
+'************************************************
+'*	    ANALYZE_DATA SUBROUTINE   	        *
+'************************************************
+
+'Runs the analyze_data@ queries, on only layers currently turned ON
+
+'analyze_data_do_pitch@ SMTOn%		'turn on/off SMT pitch test
+'analyze_data_do_space@ AirOn%		'turn on/off Air Gap test
+'analyze_data_do_drilltoline@ DrillOn%	'turn on/off Drill to Trace test
+analyze_data@
+
+'Reset Tolerance Values
+TempMintrace#	= 0
+TempMinclear#	= 0
+TempMinring#	= 0
+TempMindrill#	= 0
+TempTight#	= 0
+TempMinPad#	= 0
+TempSmt%	= 0
+TempPitch#	= 0
+
+
+'	Find SMALLEST TRACE
+if min_trace_valid! = True% then 
+	setdcode@ min_trace_dcode!			'If nets are present, use this test
+	TempMintrace# = dcodesizex!
+else
+	if min_line_valid! = True% then
+		setdcode@ min_line_dcode!		'If nets are not present, use this test
+		TempMintrace# = dcodesizex!
+	end if
+end if
+
+'	Find SMALLEST AIR GAP
+if min_spacing_valid! = True% then TempMinclear# = min_spacing_size!
+
+
+'	Find SMALLEST ANNULAR RING
+if min_annular_ring_valid! = True% then TempMinring# = min_annular_ring_size!
+
+
+'	Find SMALLEST DRILL SIZE
+if min_drill_valid! = True% then TempMindrill# = min_drill_size!
+
+'	Find TIGHTEST DRILL TO TRACE
+if min_drill_2_trace_valid! = True% then TempTight# = min_drill_2_trace_size!
+
+'	Find SMALLEST PAD
+if min_pad_round_valid! = True% then 
+	setdcode@ min_pad_round_dcode!
+	TempMinPad# = dcodesizex!
+end if
+
+'	Find # of SMT PADS
+if min_pad_smt_valid! = True% then TempSmt% = num_pads_smt!
+
+
+'	Find SMALLEST SMT PITCH
+if min_smt_pitch_valid! = True% then TempPitch# = min_smt_pitch_size!
+
+return
+
+
+6530
+'************************************************
+'*	    TURN ON LAYERS SUBROUTINE  	        *
+'************************************************
+
+setlayer@ OnLayer%(1)	'turn on first layer
+layer_alloff@ 1
+view_redraw@
+
+'Turn on remaining layers
+for O = 2 to G
+	setlayer@ OnLayer%(O)
+next
+view_redraw@
+
+'Reset array:
+For A = 1 to G
+	OnLayer%(A) = -1
+next
+return
+
+
+
+6550
+'************************************************
+'*	    DRILL INFO. SUBROUTINE   	        *
+'************************************************
+
+'Determine drill information for the design, using the NC Tool Table(s)
+'Script sets each drill layer, then checks the table # assigned to the layer.
+'	- each table is checked for drill tool info
+'	- variable for total # of drills and # of drill hits
+'	- smallest drill size and hits are tracked by two separate variables
+
+print_msg "FINDING DRILL TOOLS"
+
+SmSize# = 1000			'tracks the size of the smallest drill in design
+DrillSmSize# = 1000		'set values initially
+
+if DrillCount% > 0 then
+
+	'	Find the number of tables in the design, and array their ID #s value
+	DT = 1		'increments tool table array
+
+
+	'	Find intial tool table
+	setlayer@ Drill%(DT)
+	DrillTable%(DT)	= tooltable!
+
+	'check each layer for it's tool table, compare to previous to see if it's a new table
+	for D = 2 to DrillCount%
+		setlayer@ Drill%(D)
+		DrillTemp% = tooltable!
+
+		'	Test the new drill table against all previously-arrayed tables, to weed out duplicates
+		End% 	= D
+		Test%	= DrillTemp%
+		gosub 6655
+		if NewTab% = False% then
+			DT = DT + 1
+			DrillTable%(DT) = DrillTemp%
+		end if
+			
+
+	next
+
+	'	Set each table and gather tool info from it:
+	for H = 1 to DT
+		set_nc_table@ DrillTable%(H)
+
+		'	Find tools in the table, up to highest used
+		for R = 1 to dbq_highesttoolref!
+			set_nc_toolref@ R
+
+			'	Determine tool table info: # hits, # tools, smallest tool, etc.
+			if dbq_toolused! = True% then
+				DrillTools% 	= DrillTools% + 1
+				DrillHitTot% 	= DrillHitTot% + dbq_drillcount!
+				DrillSmSize# 	= dbq_toolsize!
+				DrillSmHit% 	= dbq_drillcount!
+			end if
+
+			'	Compare smallest tool to previously-found small tool
+			if DrillSmSize# < SmSize# then
+				SmSize# 	= DrillSmSize#
+				SmHit% 		= DrillSmHit%
+			end if
+
+		next
+	next
+end if
+	
+'if no tools were used, set smallest drill off
+if DrillSmSize# = 1000 then
+	DrillSmSize# = -1
+else
+	DrillSmSize# = SmSize#
+	DrillSmHit%  = SmHit%
+end if
+			
+close_msg	
+return
+
+
+6655
+'************************************************
+'*	CHECK DRILL TABLES SUBROUTINE           *
+'************************************************
+
+'Checks array of drill tables to make sure there aren't repeats
+
+Tmp% 		= False%
+NewTab%		= False%
+
+for Tmp% = 1 to End%
+	if DrillTable%(Tmp%) = Test% then NewTab% = True%
+next
+return
+
+
+6600
+'************************************************
+'*		SMT PADS SUBROUTINE   	        *
+'************************************************
+
+'Run SMT Analyze Data queries on selected layers
+'	- determine number of pads on top/bottom
+'	- calculate total
+'	- determine smallest picthes on these layers
+
+print_msg "CHECKING SMT PADS"
+
+'	Top Layer
+setlayer@ Top%
+layer_alloff@ 1
+view_redraw@
+
+'	Analyze Top
+SMTOn% 		= True%
+AirOn% 		= False%
+DrillOn%	= False%
+gosub 6520
+
+'	Find Number of SMTs:
+SmtTop% = TempSmt%
+
+'	Find Smallest SMT Pitch:
+TopPitch# = TempPitch#
+
+
+'	Bot Layer
+setlayer@ Bot%
+layer_alloff@ 1
+view_redraw@
+
+'	Analyze Bottom
+SMTOn% 		= True%
+AirOn% 		= False%
+DrillOn%	= False%
+gosub 6520
+
+'	Find Number of SMTs:
+SmtBot% = TempSmt%
+
+'	Find Smallest SMT Pitch:
+BotPitch# = TempPitch#
+
+
+'Determine Totals:
+
+TotSMT% = SmtTop% + SmtBot%
+
+'Find minimum pitch for both layers: maybe used in user-created report
+if TopPitch# = BotPitch# then		
+	MinPitch# = TopPitch#
+else
+	if TopPitch# > BotPitch# then
+		MinPitch# = BotPitch#
+	else
+		MinPitch# = TopPitch#
+	end if
+end if
+
+close_msg
+return
+
+
+6650
+'************************************************
+'*		PRINT SUBROUTINE   	        *
+'************************************************
+
+'Prints the report form to the local printer, using default printer
+'settings set in Cam350
+
+'Print form
+print_plot@
+print_SetOutputAllBlack@ "Yes"
+print_SetOrientation@ 1
+print_SetPaperSize@ -32768
+print_SetPaperBin@ -32768
+print_SetHeader@ "Off"
+PlotLayerAlign@ "on"
+PlotLayerRotate@ "off"
+PlotLayerScale@ "1.00"
+PlotLayerOffsetXY@ 451.4925,287.3134
+PlotLayerPens@ 1,1
+PlotLayer@ ReportLay%
+PlotSameSheet@ "fill"
+
+'print 2nd page of MRC Report
+if AgtType$ = MRC$ then
+			'if CheckAgt$ = "mrc" then
+	print_plot@
+	print_SetOutputAllBlack@ "Yes"
+	print_SetOrientation@ 1
+	print_SetPaperSize@ -32768
+	print_SetPaperBin@ -32768
+	print_SetHeader@ "Off"
+	PlotLayerAlign@ "on"
+	PlotLayerRotate@ "off"
+	PlotLayerScale@ "1.00"
+	PlotLayerOffsetXY@ 451.4925,287.3134
+	PlotLayerPens@ 1,1
+	PlotLayer@ ReportLay2%		'sets 2nd page layer
+	PlotSameSheet@ "fill"
+end if
+
+return
+
+
+6700
+'************************************************
+'*	   SAVE GERBER SUBROUTINE   	        *
+'************************************************
+
+'Save the report form as a gerber layer
+
+GerbLay$ = GerbExt$
+print "Report Form will be saved as: "+CR!+GerbLay$
+setup_fmtype@ 0,1					'Set format to 274X Gerber
+setup_fmtdigits@ 0,2,4					'Set precision to 2,4
+set_layermirrorstate@ ReportLay%,0
+layer_setimagepolarity@ ReportLay%,0
+exportPCBgbrfile@ ReportLay%,-1,GerbLay$
+
+'save 2nd page of MRC Report
+if AgtType$ = MRC$ then
+			'if CheckAgt$ = "mrc" then
+	GerbLay$ = GerbExt2$
+	print "Report Form will be saved as: "+CR!+GerbLay$
+	setup_fmtype@ 0,1					'Set format to 274X Gerber
+	setup_fmtdigits@ 0,2,4					'Set precision to 2,4
+	set_layermirrorstate@ ReportLay2%,0
+	layer_setimagepolarity@ ReportLay2%,0
+	exportPCBgbrfile@ ReportLay2%,-1,GerbLay$
+end if
+
+return
+
+
+6750
+'************************************************
+'*	   SAVE DESIGN SUBROUTINE   	        *
+'************************************************
+
+'Save the report form as part of the database
+
+print "Saving database: " + CR! + ucase$(FileName$) + CR! + " to Local and Archive Directories"
+
+layer_alloff@ False%
+view_all@
+view_redraw@
+
+'	Create filepath
+NewName$ = Design$+".cam"
+FileOk% = True%
+
+if FileExists(NewName$) = True% then 
+	Statement$ = "A previously-saved copy of '"+ucase$(NewName$)+"' exists!"+CR!+"Overwrite it?"
+	ok_cancel Statement$, FileOk%
+end if
+
+'Save file locally on CAM terminal drive, using directory filepath from Environment File
+if FileOk% = True% then setsaveasfile@ NewName$
+return
+
+
+6800
+'************************************************
+'*		   MASK SUBROUTINE   	        *
+'************************************************
+
+'Determines which mask layers, if any, are used in the design
+
+'Set initial values:
+TMaskOK% = False%
+BMaskOK% = False%
+NumMask% = 0
+
+If TMask% > -1 then
+	TMaskOK% = True%
+	NumMask% = NumMask% + 1
+end if
+if BMask% > -1 then
+	BMaskOK% = True%
+	NumMask% = NumMask% + 1
+end if
+return
+
+
+6850
+'************************************************
+'*		   SILK SUBROUTINE   	        *
+'************************************************
+
+'Determines which silk layers, if any, are used in the design
+
+'Set initial values:
+TSilkOK% = False%
+BSilkOK% = False%
+NumSilk% = 0
+
+If TSilk% > -1 then
+	TSilkOK% = True%
+	NumSilk% = NumSilk% + 1
+end if
+if BSilk% > -1 then
+	BSilkOK% = True%
+	NumSilk% = NumSilk% + 1
+end if
+return
+
+
+
+
+
+'*****************************************************************************
+'			QUOTE SUBROUTINES
+'*****************************************************************************
+
+'	- These subroutines run all queries, etc. appropriate to a Quote agent
+
+
+7200
+'************************************************
+'*	GENERIC QUOTE REPORT SUBROUTINE         *
+'************************************************
+
+'Will create a generic report format, and fill with information gathered
+'from the design.
+
+'Verify Units:
+TempUnit$ = Unit$
+gosub 7250
+
+'Create report form:
+gosub 7300
+
+'Fill with information:
+gosub 7325	'format variables for adding text
+gosub 7350	'add text to report
+
+'Return Units, if necessary:
+TempUnit$ = Unit$
+gosub 7275
+
+return
+
+
+7250
+'************************************************
+'*	REPORT UNITS SWITCH SUBROUTINE          *
+'************************************************
+
+'Reset units to inch to draw report form (since form was recording using mils)
+
+if TempUnit$ = "MM" then
+	setunit@ 0		'Change units setting to MILS to draw report
+	update_dcodebar@ 
+	update_buttonbars@ 
+	setsnap@ 0
+	setresolution@ 10
+	update_dcodebar@
+end if
+return
+
+
+7275
+'************************************************
+'*	REINSTATE REPORT UNITS SUBROUTINE       *
+'************************************************
+
+'If units were changed to draw report form, change them back
+
+if TempUnit$ = "MM" then
+	setunit@ 1		'set units back to METRIC
+	update_dcodebar@ 
+	update_buttonbars@ 
+	setsnap@ 0
+	setresolution@ 100
+	update_dcodebar@
+end if
+return
+
+
+7300
+'************************************************
+'*	CREATE REPORT FORM SUBROUTINE  	        *
+'************************************************
+'Creates the "Generic" Quote Report, using a new layer in the currently-loaded design.
+
+print_msg "GENERATING QUOTE REPORT"
+
+
+'1 ) Draw report form graphics:
+setdcode@ Thick%		'apertures set at beginning of script
+
+setlayer@ ReportLay%
+layer_alloff@ True%
+view_all@
+view_redraw@
+
+'	Draw rectangles, relative to origin in lower left
+add_rectangle@
+setsnap@ 0
+axy@ 0.0000,10000.0000
+setgridsnap@ 0
+axy@ 7500.0000,0.0000
+axy@ 3750.0000,9175.0000
+axy@ 7500.0000,7920.0000
+end@
+
+view_all@
+view_redraw@
+
+add_rectangle@
+axy@ 0.0000,2600.0000
+axy@ 3675.0000,1000.0000
+axy@ 0.0000,1000.0000
+back@
+axy@ 0.0000,925.0000
+axy@ 3675.0000,0.0000
+axy@ 3750.0000,3025.0000
+back@
+axy@ 3825.0000,2600.0000
+axy@ 7500.0000,1000.0000
+axy@ 3825.0000,925.0000
+axy@ 7500.0000,0.0000
+'	axy@ 3750.0000,9250.0000
+'	axy@ 7500.0000,8000.0000
+axy@ 0.0000,7650.0000
+axy@ 7500.0000,6900.0000
+back@
+
+
+'	Draw lines, still using thick ap
+add_line@
+axy@ 0.0000,7925.0000
+setortho@ 0
+axy@ 3750.0000,7925.0000
+back@
+axy@ 0.0000,6650.0000
+axy@ 7500.0000,6650.0000
+back@
+axy@ 1796.5000,6900.0000
+axy@ 1796.5000,6650.0000
+back@
+axy@ 4000.0000,6900.0000
+axy@ 4000.0000,6650.0000
+back@
+axy@ 4977.0000,7650.0000
+axy@ 4977.0000,6900.0000
+back@
+axy@ 0.0000,6250.0000
+axy@ 7500.0000,6250.0000
+back@
+axy@ 0.0000,5300.0000
+axy@ 7500.0000,5300.0000
+back@
+axy@ 0.0000,4499.5000
+axy@ 7500.0000,4499.5000
+back@
+axy@ 0.0000,2725.0000
+axy@ 7500.0000,2725.0000
+back@
+axy@ 3825.0000,1275.0000
+axy@ 7500.0000,1275.0000
+back@
+axy@ 3825.0000,250.0000
+axy@ 7500.0000,250.0000
+back@
+axy@ 5050.0000,250.0000
+axy@ 5050.0000,0.0000
+back@
+axy@ 5493.6000,6250.0000
+axy@ 5493.6000,5300.0000
+back@
+axy@ 0.0000,9175.0000
+axy@ 3750.0000,9175.0000
+back@
+axy@ 0.0000,9450.0000
+axy@ 7500.0000,9450.0000
+back@
+
+'	Draw remaining lines, using thinner dcode
+setdcode@ Thin%
+update_dcodebar@ 
+
+axy@ 5700.0000,6900.0000
+axy@ 5700.0000,6650.0000
+back@
+axy@ 6600.0000,6900.0000
+axy@ 6600.0000,6650.0000
+back@
+axy@ 0.0000,9750.0000
+axy@ 7500.0000,9750.0000
+back@
+axy@ 3100.0000,10000.0000
+axy@ 3100.0000,9750.0000
+back@
+axy@ 0.0000,5900.0000
+axy@ 7500.0000,5900.0000
+back@
+axy@ 0.0000,5600.0000
+axy@ 5500.0000,5600.0000
+back@
+axy@ 4000.0000,6250.0000
+axy@ 4000.0000,5600.0000
+back@
+axy@ 2500.0000,6250.0000
+axy@ 2500.0000,5300.0000
+back@
+axy@ 3750.0000,4838.6000
+axy@ 7500.0000,4838.6000
+back@
+axy@ 0.0000,4160.5000
+axy@ 7500.0000,4160.5000
+back@
+axy@ 0.0000,3805.0000
+axy@ 7500.0000,3805.0000
+back@
+axy@ 0.0000,3417.8000
+axy@ 7500.0000,3417.8000
+
+back@
+axy@ 0.0000,3050.0000
+axy@ 7500.0000,3050.0000
+back@
+
+axy@ 3750.0000,4838.6000
+axy@ 3750.0000,2725.0000
+back@
+axy@ 5500.0000,4838.6000
+axy@ 5500.0000,2725.0000
+back@
+
+axy@ 1175.0000,2250.0000
+axy@ 3675.0000,2250.0000
+back@
+axy@ 1175.0000,1700.0000
+axy@ 3675.0000,1700.0000
+back@
+
+axy@ 1175.0000,1975.0000
+axy@ 3675.0000,1975.0000
+back@
+axy@ 1175.0000,2250.0000
+axy@ 1175.0000,1700.0000
+back@
+
+axy@ 2000.0000,2250.0000
+axy@ 2000.0000,1700.0000
+back@
+axy@ 2800.0000,2250.0000
+axy@ 2800.0000,1700.0000
+back@
+axy@ 1175.0000,1275.0000
+axy@ 2800.0000,1275.0000
+back@
+axy@ 1175.0000,1550.0000
+axy@ 1175.0000,1000.0000
+back@
+axy@ 1175.0000,1550.0000
+axy@ 2800.0000,1550.0000
+back@
+
+axy@ 2006.4000,1550.0000
+axy@ 2006.4000,1000.0000
+back@
+axy@ 2800.0000,1550.0000
+axy@ 2800.0000,1000.0000
+back@
+axy@ 3825.0000,1545.1000
+axy@ 5450.0000,1545.1000
+back@
+axy@ 3825.0000,1825.0000
+axy@ 5450.0000,1825.0000
+back@
+axy@ 5875.0000,1825.0000
+axy@ 7500.0000,1825.0000
+back@
+axy@ 5875.0000,1550.0000
+axy@ 7500.0000,1550.0000
+back@
+
+axy@ 4650.0000,1825.0000
+axy@ 4650.0000,1399.8000
+axy@ 4650.0000,1399.8000
+axy@ 4650.0000,1275.0000
+back@
+axy@ 5450.0000,1825.0000
+axy@ 5450.0000,1275.0000
+back@
+axy@ 5875.0000,1825.0000
+axy@ 5875.0000,1000.0000
+back@
+axy@ 6672.2000,1825.0000
+back@
+axy@ 6672.2000,1825.0000
+back@
+axy@ 6700.0000,1825.0000
+axy@ 6700.0000,1275.0000
+back@
+back@
+
+
+
+'2) Create Text Labels:
+
+textfullheight@ Medium%
+
+add_text@
+addtext@ 100.0000,9875.0000,505.1246,9800.0000,"DATE:"
+addtext@ 3225.0000,9875.0000,4369.6288,9800.0000,"AGENT FILE USED:"
+addtext@ 3850.0000,9050.0000,4637.6245,9100.0000,"CUSTOMER:"
+addtext@ 3850.0000,8250.0000,4330.9994,8293.3000,"PHONE:"
+addtext@ 5580.0000,8250.0000,5891.1525,8293.3000,"FAX:"
+addtext@ 3850.0000,8050.0000,4369.7617,8100.0000,"E-MAIL:"
+addtext@ 100.0000,9325.0000,100.0000,9325.0000,"OPERATOR:"
+addtext@ 3850.0000,9300.0000,3850.0000,9300.0000,"JOB #:"
+addtext@ 6475.0000,9300.0000,6475.0000,9300.0000,"REV:"
+
+textjust@ Just%
+textfullheight@ Large%
+
+addtext@ 3750.0000,7800.0000,4489.7605,7800.0000,"BOARD INFORMATION"
+addtext@ 3750.0000,6425.0000,4451.4472,6425.0000,"DRILL INFORMATION"
+addtext@ 3750.0000,5075.0000,4359.7650,5075.0000,"DESIGN ANALYSIS"
+addtext@ 1725.0000,2450.0000,2128.7374,2725.0000,"SMT PADS:"
+addtext@ 5675.0000,2450.0000,6078.3218,2725.0000,"GOLD TABS:"
+addtext@ 1775.0000,700.0000,2438.3540,700.0000,"SOLDERMASK INFO:"
+addtext@ 5600.0000,700.0000,6213.6183,700.0000,"SILKSCREEN INFO:"
+
+textfullheight@ Medium%
+
+addtext@ 4650.0000,4675.0000,4890.7242,4675.0000,"Internals"
+addtext@ 6450.0000,4675.0000,7026.9701,4675.0000,"Other (user defined):"
+addtext@ 1600.0000,2100.0000,1729.9955,2375.0000,"TOP"
+addtext@ 2400.0000,2100.0000,2690.5287,2375.0000,"BOTTOM"
+addtext@ 3250.0000,2100.0000,3475.4760,2375.0000,"TOTAL"
+addtext@ 1600.0000,1400.0000,1729.9955,1400.0000,"TOP"
+addtext@ 2400.0000,1400.0000,2690.5287,1400.0000,"BOTTOM"
+addtext@ 4650.0000,1975.0000,5095.4609,1975.0000,"# OF FINGERS:"
+addtext@ 6700.0000,1975.0000,7130.0613,1975.0000,"FINGER SIZE:"
+addtext@ 4250.0000,1675.0000,4379.9955,1675.0000,"TOP"
+addtext@ 5050.0000,1675.0000,5340.5287,1675.0000,"BOTTOM"
+addtext@ 6300.0000,1675.0000,6575.1704,1675.0000,"LENGTH"
+addtext@ 7100.0000,1675.0000,7329.2743,1675.0000,"WIDTH"
+
+textjust@ Left%
+
+addtext@ 100.0000,7500.0000,944.8743,7500.0000,"BOARD SIZE:"
+addtext@ 2900.0000,7500.0000,3495.2211,7500.0000,"THICKNESS:"
+addtext@ 100.0000,7250.0000,906.5609,7250.0000,"PANEL SIZE:"
+addtext@ 2900.0000,7250.0000,3430.1545,7250.0000,"CORE SIZE:"
+addtext@ 100.0000,7000.0000,1235.2240,7000.0000,"LAMINATE TYPE:"
+addtext@ 5100.0000,7500.0000,6843.2275,7500.0000,"BORDER LAYER PRESENT?"
+addtext@ 5100.0000,7300.0000,5795.8321,7300.0000,"# OF NETS:"
+addtext@ 5100.0000,7050.0000,6235.3617,7050.0000,"COPPER WEIGHT:"
+addtext@ 100.0000,6800.0000,1204.4246,6800.0000,"TOTAL (Elec.) layers:"
+addtext@ 1900.0000,6800.0000,3241.4331,6800.0000,"# of INTERNAL layers:"
+addtext@ 4100.0000,6800.0000,5196.9106,6800.0000,"# of PLANE layers:"
+addtext@ 5800.0000,6800.0000,6052.4769,6800.0000,"POS"
+addtext@ 6700.0000,6800.0000,6982.8358,6800.0000,"NEG"
+addtext@ 100.0000,6050.0000,2401.1647,6050.0000,"# OF DRILL TOOLS / TOTAL COUNT:"
+back@
+
+addtext@ 100.0000,5750.0000,2355.2548,5750.0000,"SMALLEST DRILL / TOTAL COUNT:"
+addtext@ 100.0000,5450.0000,1938.4876,5450.0000,"TIGHTEST DRILL TO TRACE:"
+addtext@ 5600.0000,6050.0000,6987.5635,6050.0000,"BLIND/BURIED VIAS?"
+addtext@ 5600.0000,5750.0000,6005.2621,5472.6000,"# OF DRILL"+CR!+"FILES:"
+addtext@ 133.6000,4313.9000,1368.4055,4313.9000,"SMALLEST TRACE:"
+addtext@ 125.0000,3975.0000,1455.4512,3975.0000,"SMALLEST AIR GAP:"
+addtext@ 125.0000,3600.0000,1952.3131,3600.0000,"SMALLEST ANNULAR RING:"
+addtext@ 125.0000,3225.0000,2651.8335,3225.0000,"SMALLEST THERMAL ANNULAR RING:"
+
+addtext@ 125.0000,2875.0000,2651.8335,3225.0000,"SMALLEST PAD:"
+addtext@ 100.0000,2000.0000,803.6490,2250.0000,"# OF PADS:"
+addtext@ 100.0000,1275.0000,1044.2355,1275.0000,"Smallest PITCH:"
+back@
+
+add_text@
+addtext@ 4025.0000,1125.0000,5236.8507,1125.0000,"GOLD THICKNESS:"
+addtext@ 100.0000,425.0000,398.2217,425.0000,"TOP:"
+addtext@ 2000.0000,425.0000,2619.2882,425.0000,"BOTTOM:"
+addtext@ 3925.0000,425.0000,4223.2217,425.0000,"TOP:"
+addtext@ 5825.0000,425.0000,6444.2882,425.0000,"BOTTOM:"
+addtext@ 3925.0000,125.0000,4429.6511,125.0000,"COLOR:"
+addtext@ 625.0000,150.0000,1958.9740,150.0000,"VIAS Tented / Plugged:"
+back@
+
+view_all@
+view_redraw@
+close_msg
+return
+
+
+7325
+'************************************************
+'*	FORMAT VARIABLES SUBROUTINE  	        *
+'************************************************
+
+'Sets variables which require it to string variables to add to the report form.
+
+UnitSm$		= CText$		'set display unit text
+UnitC#		= Convert#		'set unit conversion factor
+UnitCm$		= Cm$
+UnitCm%		= Cm%
+UnitM$		= CText$
+UnitIn$		= In$
+UnitM%		= M%
+
+
+'	Set General variables:
+Date$		= time!
+
+if AgtType$ = Quote$ then 
+	ReportType$	= ucase$(AgtType$) + " REPORT"
+else
+	ReportType$	= ucase$(AgtType$) + " REPORT (page 1 of 2)"
+end if
+
+'	Company and customer info: 
+CompName$	= CompName$
+CompAdd$	= CompStr$ + CR! + CompCity$ + " "+ CompState$ + " " + CompZip$
+CompLogo$	= "NO" + CR! + "LOGO"		'on generic form, list agent format, instead of company logo
+CustAdd$	= CustStr$ + CR! + CustCity$ + "  " + CustState$ + "  " + CustZip$ + CR! + CustCount$
+
+'	Unit-dependant information:
+
+
+select case Unit$
+	case "MM"				'Convert board and panel values to centimeter
+		BoardX$		= fmtusing$(FMT$,BorXTot# / UnitCm%)  + UnitCm$ 	'set board size
+		BoardY$		= fmtusing$(FMT$,BorYTot# / UnitCm%)  + UnitCm$
+		BoardStr$	= BoardX$ + " X" + BoardY$
+		PanelX$		= fmtusing$(FMT$,PanelX# / UnitCm%) + UnitCm$ 
+		PanelY$		= fmtusing$(FMT$,PanelY# / UnitCm%) + UnitCm$
+		PanelStr$	= PanelX$ + " X" + PanelY$
+
+		BoardThk$	= fmtusing$(FMT$,BrdThick#) + UnitSm$
+		CoreSize$	= fmtusing$(FMT$,CoreSize#) + UnitSm$
+
+	case "INCH"				'convert values to inches
+		BoardX$		= fmtusing$(FMT$,BorXTot# * UnitC#)  + UnitSm$ 	'set board size
+		BoardY$		= fmtusing$(FMT$,BorYTot# * UnitC#)  + UnitSm$
+		BoardStr$	= BoardX$ + " X" + BoardY$
+		PanelX$		= fmtusing$(FMT$,PanelX#) + UnitSm$ 
+		PanelY$		= fmtusing$(FMT$,PanelY#) + UnitSm$
+		PanelStr$	= PanelX$ + " X" + PanelY$
+
+		BoardThk$	= fmtusing$(FMT$,BrdThick#) + UnitSm$
+		CoreSize$	= fmtusing$(FMT$,CoreSize#) + UnitSm$
+
+	case "MIL"				'convert to mils
+		BoardX$		= fmtusing$(FMT$,BorXTot# / UnitM%)  + UnitIn$ 	'set board size
+		BoardY$		= fmtusing$(FMT$,BorYTot# / UnitM%)  + UnitIn$
+		BoardStr$	= BoardX$ + " X" + BoardY$
+		PanelX$		= fmtusing$(FMT$,PanelX#) + UnitIn$ 
+		PanelY$		= fmtusing$(FMT$,PanelY#) + UnitIn$
+		PanelStr$	= PanelX$ + " X" + PanelY$
+
+		BoardThk$	= fmtusing$(FMT$,BrdThick#) + UnitM$
+		CoreSize$	= fmtusing$(FMT$,CoreSize#) + UnitM$
+end select
+
+'	Layer and Design Information
+Copper$		= fmtusing$(FMT$,CopWght#) + "oz."
+TotLyrs$	= str$(ElecLayCount%)
+IntLyrs$	= str$(IntCount%)
+PlnLyrs$	= str$(PlaneTot%)
+Pos$		= str$(PosCount%)
+Neg$		= str$(NegCount%)
+if Border% > -1 then
+	BrdPres$	= "Yes"
+else
+	BrdPres$	= "No"
+end if
+NumNets$	= str$(NumNets%)
+
+'	Drill Information
+if DrillTools% > 0 then
+	Drills$		= str$(DrillTools%)
+	TotDrills$	= str$(DrillHitTot%)
+else
+	Drills$		= "N/A"
+	TotDrills$	= "N/A"
+end if
+
+if DrillSmSize# > -1 then
+	SmDrill$	= fmtusing$(FMT$,DrillSmSize# * UnitC#) + UnitSm$
+	SmDrillCt$	= str$(DrillSmHit%)
+else
+	SmDrill$	= "N/A"
+	SmDrillCt$	= "N/A"
+end if
+
+if Tight# > 0 then 	
+	Tight$		= fmtusing$(FMT$,Tight# * UnitC#) + UnitSm$
+else
+	Tight$		= "N/A"
+end if
+
+if Tent% = 1 then
+	if DrillCount% > 0 then
+		BB$ = "Yes"
+	else
+		BB$ = "No"
+	end if
+else
+	BB$ = "No"
+end if
+
+DrlFiles$	= str$(DrillCount%)
+
+'	Analysis Information
+
+SmTrc$		= fmtusing$(FMT$,Mintrace# * UnitC#) + UnitSm$
+if Mintraceint#	> 0 then
+	SmTrcInt$	= fmtusing$(FMT$,Mintraceint# * UnitC#) + UnitSm$
+else
+	SmTrcInt$	= "N/A"
+end if
+
+SmAir$		= fmtusing$(FMT$,Minclear# * UnitC#) + UnitSm$
+if Minclearint#	> 0 then
+	SmAirInt$	= fmtusing$(FMT$,Minclearint# * UnitC#) + UnitSm$
+else
+	SmAirInt$	= "N/A"
+end if
+
+
+SmAnn$		= fmtusing$(FMT$,Minring# * UnitC#) + UnitSm$
+if Minringint#	> 0 then
+	SmAnnInt$	= fmtusing$(FMT$,Minringint# * UnitC#) + UnitSm$
+else
+	SmAnnInt$	= "N/A"
+end if
+
+SmThrm$		= fmtusing$(FMT$,MinThrmRing# * UnitC#) + UnitSm$
+SmThrmInt$	= "N/A"
+
+SmPad$		= fmtusing$(FMT$,Minpad# * UnitC#) + UnitSm$
+if Minpadint#	> 0 then
+	SmPadInt$	= fmtusing$(FMT$,Minpadint# * UnitC#) + UnitSm$
+else
+	SmPadInt$	= "N/A"
+end if
+
+'	SMT Info
+SmtTop$		= str$(SmtTop%)
+SmtBot$		= str$(SmtBot%)
+SmtTot$		= str$(TotSMT%)
+SmtPchTop$	= fmtusing$(FMT$,TopPitch# * UnitC#) + UnitSm$
+SmtPchBot$	= fmtusing$(FMT$,BotPitch# * UnitC#) + UnitSm$
+
+'	Gold finger info
+GoldTop$ 	= str$(GoldFingTop%)
+GoldBot$	= str$(GoldFingBot%)
+FingLong$	= fmtusing$(FMT$,GoldFingLng#) + UnitSm$
+FingWide$	= fmtusing$(FMT$,GoldFingWid#) + UnitSm$
+GoldThk$	= fmtusing$(FMT$,GoldThick#) + UnitSm$
+
+'	Mask Info
+if TMaskOk% 	= True% then
+	TopMask$ = "Yes"
+else
+	TopMask$ = "No"
+end if
+if BMaskOK% 	= True% then
+	BotMask$ = "Yes"
+else
+	BotMask$ = "No"
+end if
+if Tent% = False% then
+	TentPlg$ = "No"
+else
+	TentPlg$ = "Yes"
+end if
+
+'	Silk Info
+if TSilkOk% 	= True% then
+	TopSilk$ = "Yes"
+else
+	TopSilk$ = "No"
+end if
+if BSilkOK% 	= True% then
+	BotSilk$ = "Yes"
+else
+	BotSilk$ = "No"
+end if
+SilkClr$	= SilkColor$
+
+
+return
+
+7350
+'************************************************
+'*	ADD TEXT TO REPORT SUBROUTINE  	        *
+'************************************************
+
+'Will use information from design and analysis subroutines to fill in
+'report form.
+
+'Like the Creation subroutine, uses coordinates relative to the origin, as if it
+'were located at lower left.
+
+print_msg "FILLING OUT QUOTE REPORT FORM"
+
+
+'Create text settings:
+
+'	Make new aperture to use for text:
+NewAp% = blankdcode!
+edit_aperture@ NewAp%,1,10.0000,10.0000,0,""
+
+update_dcodebar@ 
+setdcode@ NewAp%
+
+'Set Text values:
+TextLarge%	= 213			'large text
+TextMedium% 	= 152			'normal text
+TextSmall%	= 140			'small text
+
+TextJust%	= 4			'set text to center justified
+TextLeft%	= 5			'center-justified text
+
+'Set text defaults:
+setlayer@ ReportLay%
+setsectorize@ 0,1000
+textfullheight@ TextMedium%
+textangle@ 0
+textmirror@ 0
+textjust@ TextJust%
+textfitting@ 0
+textcspace@ 0.0000
+textlspace@ 125.0000
+textslant@ 0
+textxscale@ 100
+textvertical@ 0
+textfont@ "SIMPLE.EFN"
+
+setgridsnap@ 0		'Turn off grid snapping
+
+'Fill in report information.
+
+'Company and Customer info:
+textjust@ TextLeft%
+textlspace@ 40.0000
+
+addtext@ 600.0000,9875.0000,2038.1498,9800.0000,Date$
+
+textfullheight@ TextLarge%
+
+textfitting@ 1
+
+addtext@ 4725.0000,9875.0000,7445.000,9875.0000,Agent$
+addtext@ 950.0000,9300.0000,3140.0000,9300.0000,CamOp$
+addtext@ 4325.0000,9300.0000,6400.0000,9300.0000,JobNum$
+addtext@ 6800.0000,9300.0000,7450.0000,9300.0000,JobRev$
+
+textfitting@ 0
+
+textjust@ TextJust%
+textfontface@ 2,"Times New Roman"
+addtext@ 3750.0000,9575.0000,4200.0561,9450.0000,ReportType$
+
+
+textfont@ "SIMPLE.EFN"
+addtext@ 625.0000,8875.0000,1024.3749,8537.0000,CompLogo$
+
+textfitting@ 1
+textjust@ TextLeft%
+addtext@ 1350.0000,9000.0000,3700.0000,9000.0000,CompName$
+textfitting@ 0
+
+textfullheight@ TextSmall%
+textjust@ TextLeft%
+
+addtext@ 1350.0000,8750.0000,2531.2500,8595.0000,CompAdd$ +CR!+ CompCount$ +CR!+ CompPhone$
+
+textlspace@ 30.0000
+
+addtext@ 4800.0000,9050.0000,6024.9996,9100.0000,CustName$ +CR!+ CustContact$ +CR! + CustAdd$
+
+textlspace@ 40.0000
+
+addtext@ 4375.0000,8225.0000,5465.6250,8300.0000,CustPhone$
+
+addtext@ 4425.0000,8050.0000,6186.2249,8139.9000,CustMail$
+
+addtext@ 5925.0000,8225.0000,7190.6250,8300.0000,CustFax$
+
+
+textfullheight@ TextMedium%
+
+'Board and layer information:
+addtext@ 950.0000,7500.0000,1635.1561,7510.2000,BoardStr$
+
+addtext@ 950.0000,7250.0000,1580.4687,7268.1000,PanelStr$
+
+textjust@ TextJust%
+
+addtext@ 4165.0000,7500.0000,4593.7248,7518.3000,BoardThk$
+
+addtext@ 4175.0000,7250.0000,4575.0499,7275.0000,CoreSize$
+
+addtext@ 2775.0000,7025.0000,3134.5687,7025.0000,LamType$
+
+addtext@ 1500.0000,6775.0000,1852.4249,6775.0000,TotLyrs$
+
+addtext@ 3600.0000,6775.0000,3933.3749,6775.0000,IntLyrs$
+
+addtext@ 5450.0000,6775.0000,5816.7124,6775.0000,PlnLyrs$
+
+addtext@ 6300.0000,6775.0000,6635.7561,6800.0000,Pos$
+
+addtext@ 7200.0000,6775.0000,7533.3749,6800.0000,Neg$
+
+addtext@ 7100.0000,7525.0000,7485.7624,7525.0000,BrdPres$
+
+addtext@ 7100.0000,7275.0000,7088.1437,7275.0000,NumNets$
+
+addtext@ 6750.0000,7050.0000,7140.5186,7050.0000,Copper$
+
+
+'Drill information:
+addtext@ 3275.0000,6075.0000,3565.5124,6075.0000,Drills$
+
+addtext@ 4750.0000,6075.0000,5169.0998,6075.0000,TotDrills$
+
+addtext@ 3275.0000,5750.0000,3622.6624,5750.0000,SmDrill$
+
+addtext@ 4750.0000,5750.0000,5185.7686,5750.0000,SmDrillCt$
+
+addtext@ 4000.0000,5450.0000,4240.5062,5450.0000,Tight$
+
+addtext@ 7300.0000,6075.0000,7442.8750,6075.0000,BB$
+
+addtext@ 6900.0000,5600.0000,7278.6186,5600.0000,DrlFiles$
+
+
+'Database Analysis Information
+addtext@ 4650.0000,4325.0000,5045.2874,4325.0000,SmTrcInt$
+
+addtext@ 6500.0000,4325.0000,6785.7499,4325.0000,SmTrc$
+
+addtext@ 4625.0000,4000.0000,4994.0937,4000.0000,SmAirInt$
+
+addtext@ 6500.0000,3975.0000,6759.5562,3975.0000,SmAir$
+
+addtext@ 4625.0000,3600.0000,5004.8124,3600.0000,SmAnnInt$
+
+addtext@ 6500.0000,3600.0000,6770.2750,3600.0000,SmAnn$
+
+addtext@ 6500.0000,3250.0000,6845.2812,3250.0000,SmThrm$
+
+addtext@ 4625.0000,3225.0000,5079.8187,3225.0000,SmThrmInt$
+
+addtext@ 6500.0000,2900.0000,6845.2812,2900.0000,SmPad$
+
+addtext@ 4625.0000,2900.0000,4625.8187,2900.0000,SmPadInt$
+
+
+'SMT Information
+addtext@ 1600.0000,1875.0000,1951.2312,2125.0000,SmtTop$
+
+addtext@ 2375.0000,1875.0000,2701.2312,2125.0000,SmtBot$
+
+addtext@ 3250.0000,1875.0000,3564.3250,2125.0000,SmtTot$
+
+textfitting@ 1
+
+'addtext@ 1600.0000,1150.0000,2078.6311,1150.0000,SmtPchTop$
+
+'addtext@ 2375.0000,1150.0000,2853.6311,1150.0000,SmtPchBot$
+
+addtext@ 1200.0000,1150.0000,1980.0000,1150.0000,SmtPchTop$
+
+addtext@ 2040.0000,1150.0000,2775.0000,1150.0000,SmtPchBot$
+
+textfitting@ 0
+
+
+'Gold Tab information:
+addtext@ 4275.0000,1425.0000,4651.2373,1425.0000,GoldTop$
+
+addtext@ 5050.0000,1425.0000,5426.2373,1425.0000,GoldBot$
+
+addtext@ 6275.0000,1400.0000,6677.4311,1400.0000,FingLong$
+
+addtext@ 7100.0000,1425.0000,7478.6187,1425.0000,FingWide$
+
+addtext@ 6700.0000,1125.0000,7076.2373,1125.0000,GoldThk$
+
+
+'Silk and Mask layer information:
+addtext@ 4950.0000,425.0000,5290.5187,400.0000,TopSilk$
+
+addtext@ 6950.0000,425.0000,7290.5187,425.0000,BotSilk$
+
+addtext@ 6300.0000,125.0000,6640.5186,125.0000,SilkClr$
+
+addtext@ 1200.0000,425.0000,1580.9999,425.0000,TopMask$
+
+addtext@ 3150.0000,425.0000,3530.9999,400.0000,BotMask$
+
+addtext@ 2625.0000,150.0000,2982.1874,150.0000,TentPlg$
+
+close_msg
+return
+
+
+7400
+'************************************************
+'*	CUSTOM QUOTE FORM SUBROUTINE   	        *
+'************************************************
+
+'Will read a operator's "custom" report form (in .cam format), find all 
+'variable keywords, and replace using their values.
+'	- will need to parse CAM file
+
+'Set variables:
+TempReport$	= FilePath$ + "temp.cam"	'temp .cam file to use as report
+TextIn$		= ""				'input from custom report form
+TextOut$	= ""				'output to temp report file
+ChkTxt%		= 0				'tracks presence of % keyword identifier
+						'	in Cam350 database
+Check$		= "%"				'Cam350 command to indicate text addition placement
+Key$		= ""				'key word parsed from input string
+NewKey$		= ""				'replacement value for keyword
+First$		= ""				'part of string before keyword
+Last$		= ""				'part of string after keyword
+
+Sym$		= " \ "
+Sym2$		= "---"
+Sym3$		= " | "
+Sym4$		= " / "
+Sym5$		= "---"
+Ctr$		= Sym$
+
+'Format the Keyword values to use:
+gosub 7325
+
+'Assign Keywords to a comparison array:
+gosub 7600
+Final% = J
+
+'Parse .CAM file, replacing keywords
+
+open Report$ for input as #1		'open "custom" report designated in Agent file
+open TempReport$ for output as #2	'create a new report to merge into the existing database
+
+do
+	line input #1, TextIn$
+
+	Select Case Ctr$		'display a visual "meter" to show user program is running
+		case Sym$
+			Ctr$ = Sym2$
+		case Sym2$
+			Ctr$ = Sym3$
+		case Sym3$
+			Ctr$ = Sym4$
+		case Sym4$
+			Ctr$ = Sym5$
+		case Sym5$
+			Ctr$ = Sym$		
+	end select
+	
+
+	print_msg "GENERATING CUSTOM REPORT FORM " + Ctr$
+
+	if TextIn$ <> "" then
+	
+		ChkTxt%	= instr(TextIn$, Check$)
+
+		'Determine if the input line contains text
+		'	If it does, parse and replace with value
+		if ChkTxt% > 0 then
+			TextOut$ = TextIn$
+			Pos1% 	= instr(TextIn$,""+quote!+"")		'finds start of keyword
+			First$	= left$(TextIn$, Pos1%)			'find first part of string
+			Pos1%	= Pos1% + 1
+
+			Pos2% 	= instr(Pos1%,TextIn$,""+quote!+"")	'finds end of keyword
+			Last$	= mid$(TextIn$, Pos2%)			'find second part of string
+			Pos2%	= (Pos2% - Pos1%)
+
+			Key$	= mid$(TextIn$,Pos1%,Pos2%)		'Parse keyword
+		
+			'Search array of keyword values to replace this keyword in new file
+			TempKey$ = Key$
+			Last%	 = Final%
+			gosub 7500
+
+			TextOut$ = First$ + TempKey$ + Last$
+		
+			print #2, TextOut$
+		
+		else	'	If not, output to new file as is
+			print #2, TextIn$
+		end if
+	end if
+
+loop until eof(1)
+
+close #1
+close #2
+
+close_msg
+return
+
+
+7500
+'************************************************
+'*	SEARCH VARIABLES ARRAY SUBROUTINE       *
+'************************************************
+
+'Searches an array of the report variables against the parsed keyword from the report
+'file
+'	- replaces keyword with value of variable
+
+for N = 1 to Last%
+	NewKey$ = KeyRep$(N)
+	NewVal$	= KeyRepVal$(N)
+
+	if TempKey$ = NewKey$ then TempKey$ = NewVal$
+next
+return
+
+
+7600
+'************************************************
+'*	VARIABLES ARRAY SUBROUTINE   	        *
+'************************************************
+
+'Sets an array of all variables derived by the Execution script,
+'to use to replace the variable keywords in a custom report form
+'	- uses Keywords placed in custom report by user
+
+'Set variable counter
+J = 0
+
+J = J + 1
+KeyRep$(J) 	= "%COMPNAME"		'company name
+KeyRepVal$(J)	= CompName$
+
+J = J + 1
+KeyRep$(J) 	= "%COMPSTR"		'company street address
+KeyRepVal$(J)	= CompStr$
+
+J = J + 1
+KeyRep$(J) 	= "%COMPCTY"		'company city
+KeyRepVal$(J)	= CompCity$
+
+J = J + 1
+KeyRep$(J) 	= "%COMPSTA"		'company state
+KeyRepVal$(J)	= CompState$
+
+J = J + 1
+KeyRep$(J) 	= "%COMPZIP"		'company postal code
+KeyRepVal$(J)	= CompZip$
+
+J = J + 1
+KeyRep$(J) 	= "%COMPCOUNT"		'company country
+KeyRepVal$(J)	= CompCount$
+
+J = J + 1
+KeyRep$(J) 	= "%COMPPHONE"		'company phone #
+KeyRepVal$(J)	= CompPhone$
+
+J = J + 1
+KeyRep$(J) 	= "%CAMOP"		'CAM operator's name
+KeyRepVal$(J)	= CamOp$
+
+J = J + 1
+KeyRep$(J) 	= "%JOBNUM"
+KeyRepVal$(J)	= JobNum$		'Job #
+
+J = J + 1
+KeyRep$(J) 	= "%JOBREV"
+KeyRepVal$(J)	= JobRev$		'Rev Letter
+
+J = J + 1
+KeyRep$(J) 	= "%CUSTNAME"		'customer's name
+KeyRepVal$(J)	= CustName$
+
+J = J + 1
+KeyRep$(J) 	= "%CUSTCONT"		'customer's contact name
+KeyRepVal$(J)	= CustContact$
+
+J = J + 1
+KeyRep$(J) 	= "%CUSTSTR"		'customer's street address
+KeyRepVal$(J)	= CustStr$
+
+J = J + 1
+KeyRep$(J) 	= "%CUSTCTY"		'customer city
+KeyRepVal$(J)	= CustCity$
+
+J = J + 1
+KeyRep$(J) 	= "%CUSTSTA"		'customer state
+KeyRepVal$(J)	= CustState$
+
+J = J + 1
+KeyRep$(J) 	= "%CUSTZIP"		'customer postal code
+KeyRepVal$(J)	= CustZip$
+
+J = J + 1
+KeyRep$(J) 	= "%CUSTCOUNT"		'customer country
+KeyRepVal$(J)	= CustCount$
+
+J = J + 1
+KeyRep$(J) 	= "%CUSTPHONE"		'customer phone #
+KeyRepVal$(J)	= CustPhone$
+
+J = J + 1
+KeyRep$(J) 	= "%CUSTMAIL"		'customer's e-mail
+KeyRepVal$(J)	= CustMail$
+
+J = J + 1
+KeyRep$(J) 	= "%CUSTFAX"		'customer's FAX #
+KeyRepVal$(J)	= CustFax$
+
+J = J + 1
+KeyRep$(J) 	= "%DATE"		'Date agent is run	
+KeyRepVal$(J)	= Date$
+
+J = J + 1
+KeyRep$(J) 	= "%AGENTNAME"		'agent name being run
+KeyRepVal$(J)	= Agent$ + ".agt"
+
+J = J + 1
+KeyRep$(J) 	= "%REPORTTYPE"		'type of report (quote or MRC)
+KeyRepVal$(J)	= ReportType$
+
+J = J + 1
+KeyRep$(J) 	= "%BOARDX"		'board x-dimension
+KeyRepVal$(J)	= BoardX$
+
+J = J + 1
+KeyRep$(J) 	= "%BOARDY"		'board y-dimension
+KeyRepVal$(J)	= BoardY$ 
+
+J = J + 1
+KeyRep$(J) 	= "%BOARDTHK"		'board thickness
+KeyRepVal$(J)	= BoardThk$
+
+J = J + 1
+KeyRep$(J) 	= "%PANELX"		'panel x-dimension
+KeyRepVal$(J)	= PanelX$ 
+
+J = J + 1
+KeyRep$(J) 	= "%PANELY"		'panel y-dimension
+KeyRepVal$(J)	= PanelY$
+
+J = J + 1
+KeyRep$(J) 	= "%CORESIZE"		'coresize
+KeyRepVal$(J)	= CoreSize$
+
+J = J + 1
+KeyRep$(J) 	= "%LAMTYPE"		'laminate type
+KeyRepVal$(J)	= LamType$
+
+J = J + 1
+KeyRep$(J) 	= "%COPPER"		'copper weight
+KeyRepVal$(J)	= Copper$
+
+J = J + 1
+KeyRep$(J) 	= "%BRDPRES"		'border layer check (y/n?)
+KeyRepVal$(J)	= BrdPres$
+
+J = J + 1
+KeyRep$(J) 	= "%TOTLYRS"		'total # of electrical layers
+KeyRepVal$(J)	= TotLyrs$
+
+J = J + 1
+KeyRep$(J) 	= "%INTLYRS"		'# of internal layers
+KeyRepVal$(J)	= IntLyrs$
+
+J = J + 1
+KeyRep$(J) 	= "%PLNLYRS"		'total # of plane layers
+KeyRepVal$(J)	= PlnLyrs$
+
+J = J + 1
+KeyRep$(J) 	= "%POS"		'# of positive planes
+KeyRepVal$(J)	= Pos$
+
+J = J + 1
+KeyRep$(J) 	= "%NEG"		'# of negative planes
+KeyRepVal$(J)	= Neg$
+
+J = J + 1
+KeyRep$(J) 	= "%NUMNETS"		'# of nets
+KeyRepVal$(J)	= NumNets$
+
+J = J + 1
+KeyRep$(J) 	= "%DRILLS"		'# of drill tools
+KeyRepVal$(J)	= Drills$
+
+J = J + 1
+KeyRep$(J) 	= "%TOTDRILLS"		'total # of drill hits
+KeyRepVal$(J)	= TotDrills$
+
+J = J + 1
+KeyRep$(J) 	= "%SMDRILL"		'smallest drill tool size
+KeyRepVal$(J)	= SmDrill$
+
+J = J + 1
+KeyRep$(J) 	= "%SMDRILLCT"		'# of hits using smallest tool
+KeyRepVal$(J)	= SmDrillCt$
+
+J = J + 1
+KeyRep$(J) 	= "%TIGHT"		'tightest drill to trace
+KeyRepVal$(J)	= Tight$
+
+J = J + 1
+KeyRep$(J) 	= "%BB"			'blind/buried vias check (y/n?)
+KeyRepVal$(J)	= BB$
+
+J = J + 1
+KeyRep$(J) 	= "%DRLFILES"		'# of drill files in design
+KeyRepVal$(J)	= DrlFiles$
+
+J = J + 1
+KeyRep$(J) 	= "%SMTRC"		'smallest trace, all layers except internal
+KeyRepVal$(J)	= SmTrc$
+
+J = J + 1
+KeyRep$(J) 	= "%SMTRCINT"		'smallest trace, internal layers only
+KeyRepVal$(J)	= SmTrcInt$
+
+J = J + 1
+KeyRep$(J) 	= "%SMAIR"		'smallest air gap, all layers except internal
+KeyRepVal$(J)	= SmAir$
+
+J = J + 1
+KeyRep$(J) 	= "%SMAIRINT"		'smallest air gap, internal layers only
+KeyRepVal$(J)	= SmAirInt$
+
+J = J + 1
+KeyRep$(J) 	= "%SMANN"		'smallest annular ring, all layers except internal
+KeyRepVal$(J)	= SmAnn$
+
+J = J + 1
+KeyRep$(J) 	= "%SMANNINT"		'smallest anuular ring, internal layers only
+KeyRepVal$(J)	= SmAnnInt$
+
+J = J + 1
+KeyRep$(J) 	= "%SMTHRM"		'smallest thermal annular ring (neg planes)
+KeyRepVal$(J)	= SmThrm$
+
+J = J + 1
+KeyRep$(J) 	= "%SMPAD"		'smallest pad size
+KeyRepVal$(J)	= SmPad$
+
+J = J + 1
+KeyRep$(J) 	= "%SMPADINT"		'smallest pad size - internals only
+KeyRepVal$(J)	= SmPadInt$
+
+J = J + 1
+KeyRep$(J) 	= "%SMTTOP"		'# of SMT pads on top layer
+KeyRepVal$(J)	= SmtTop$
+
+J = J + 1
+KeyRep$(J) 	= "%SMTBOT"		'# of SMT pads on bottom layer
+KeyRepVal$(J)	= SmtBot$
+
+J = J + 1
+KeyRep$(J) 	= "%SMTTOT"		'total # of SMT pads in design
+KeyRepVal$(J)	= SmtTot$
+
+J = J + 1
+KeyRep$(J) 	= "%SMTPCHTOP"		'smallest SMT pitch on top layer
+KeyRepVal$(J)	= SmtPchTop$
+
+J = J + 1
+KeyRep$(J) 	= "%SMTPCHBOT"		'smallest SMT pitch on bottom layer
+KeyRepVal$(J)	= SmtPchBot$
+
+J = J + 1
+KeyRep$(J) 	= "%GOLDTOP"		'# of gold fingers on top layer
+KeyRepVal$(J)	= GoldTop$
+
+J = J + 1
+KeyRep$(J) 	= "%GOLDBOT"		'# of gold fingers on bottom layer
+KeyRepVal$(J)	= GoldBot$
+
+J = J + 1
+KeyRep$(J) 	= "%FINGLONG"		'length of gold fingers
+KeyRepVal$(J)	= FingLong$
+
+J = J + 1
+KeyRep$(J) 	= "%FINGWIDE"		'width of gold fingers
+KeyRepVal$(J)	= FingWide$
+
+J = J + 1
+KeyRep$(J) 	= "%GOLDTHK"		'thickness of gold
+KeyRepVal$(J)	= GoldThk$
+
+J = J + 1
+KeyRep$(J) 	= "%TOPMASK"		'top mask layer present (y/n?)
+KeyRepVal$(J)	= TopMask$
+
+J = J + 1
+KeyRep$(J) 	= "%BOTMASK"		'bottom mask layer present (y/n?)		
+KeyRepVal$(J)	= BotMask$
+
+J = J + 1
+KeyRep$(J) 	= "%TENTPLG"		'tented or plugged vias on mask layers (y/n?)
+KeyRepVal$(J)	= TentPlg$
+
+J = J + 1
+KeyRep$(J) 	= "%TOPSILK"		'top silk layer present (y/n?)
+KeyRepVal$(J)	= TopSilk$
+
+J = J + 1
+KeyRep$(J) 	= "%BOTSILK"		'bottom silk layer present (y/n?)
+KeyRepVal$(J)	= BotSilk$
+
+J = J + 1
+KeyRep$(J) 	= "%SILKCLR"		'silk layer color
+KeyRepVal$(J)	= SilkClr$
+
+return
+
+
+7800
+'************************************************
+'*	MERGE REPORT FILE SUBROUTINE   	        *
+'************************************************
+
+'Merges in the Cam350 report database modified by the script to include
+'the Quote test values
+
+external_map_layer_start@ NewReport$
+external_map_layer2layer@ 0,ReportLay%
+axy@ 0.0000,0.0000
+file_merge_refresh@ 0.0000,0.0000,NewReport$
+setsnap@ 0
+back@
+
+'Explode merged report
+explode_part@
+setsnap@ 1
+axy@ 0.0000,0.0000
+explode_FillCustPoly@ -1
+back@
+setsnap@ 0
+back@
+
+return
+
+
+
+
+
+
+
+
+'*****************************************************************************
+'			MRC SUBROUTINES
+'*****************************************************************************
+
+'All MRC agent specific subroutines are kept here.
+'	- MRC agent report uses some routines from the Quote area, as well as 
+'		many Shared Subroutines
+
+8000
+'************************************************
+'*	RUN ANALYSIS TESTS SUBROUTINE   	*
+'************************************************
+
+'Determines which checks are to be run, and routes to appropriate subroutine
+'	- uses variables retrieved from user-specified agent file
+
+'Route user to subroutine forms to obtain information:
+if AcidTrap%	= True% then gosub 8020
+if CopSliv%	= True% then gosub 8030
+if MskSliv%	= True% then gosub 8040
+if SoldBrid%	= True% then gosub 8050
+if StarTherm%	= True% then gosub 8060
+if SilktoMask%	= True% then gosub 8070
+if SoldtoTrace%	= True% then gosub 8080
+if DRC%		= True% then gosub 8090
+if NetChk%	= True% then gosub 8100
+if NegTherm%	= True% then gosub 8110
+if CopArea%	= True% then gosub 8120
+if DrillAnl%	= True% then gosub 8130
+if MillAnl%	= True% then gosub 8140
+return
+
+
+8020
+'************************************************
+'*	       ACID TRAP CHECK SUBROUTINE       *
+'************************************************		
+
+'These variables were previously retrieved from agent file:
+'AcidTraps#	= 1		'find traps less than n mil in size
+'AcidAngs#	= 0		'find traps less than n degrees in angle
+'AcidProsCop%	= True%		'process copper layers
+'AcidFixTrap%	= True%		'fix traps or not
+'AcidRemOld%	= True%		'remove old traps
+'AcidSrch%	= Choice1%	'layers to search for acid traps
+
+IntError%	= False%
+PlaneError%	= False%
+
+print_msg "RUNNING ACID TRAPS ANALYSIS"
+
+'Turn on all selected layers from agent file:
+TempSrch% = AcidSrch%
+gosub 8035
+
+If IntError% = True% then
+	print "No Internals layers present: cannot check for Acid Traps"
+	return
+end if
+
+If PlaneError% = True% then
+	print "No Plane layers present: cannot check for Acid Traps"
+	return
+end if	
+
+acidtrapdetect@
+setacidtrapparms@ 1.0000,AcidTraps#,AcidAngs#,AcidProsCop%,AcidRemOld%
+setacidtrapfix@ AcidRemOld%
+acid_trap_layer@ 
+
+NumAcidErr%	= number_acid_traps!
+NumAcidErr$	= str$(NumAcidErr%)
+
+'Save error report:
+if NumAcidErr% > 0 then
+	AcidReport$ 	= ReportName$ + "_AcidErr.rpt"		'save error report in same directory as database
+	report_acidtraps@
+	report_acidtraps_save@ 0,0,AcidReport$
+end if
+
+
+close_msg
+return
+
+
+8030
+'************************************************
+'*	COPPER SLIVER CHECK SUBROUTINE	        *
+'************************************************
+
+
+'These variables were previously retrieved from agent file:
+'CopFind#	= 8.0		'find slivers less than n mil in size
+'CopRemOld%	= 1		'remove old slivers
+'CopSrch%	= 1		'layers to search for slivers
+
+print_msg "RUNNING COPPER SLIVERS ANALYSIS"
+
+'Turn on all selected layers from agent file:
+TempSrch% = CopSrch%
+gosub 8035
+
+If IntError% = True% then
+	print "No Internals layers present: cannot check for Copper Slivers"
+	return
+end if
+
+If PlaneError% = True% then
+	print "No Plane layers present: cannot check for Copper Slivers"
+	return
+end if
+
+sliverdetect@
+setsliverparms@ 1.0000,CopFind#,0,CopRemOld%
+setsliverfix@ 0
+sliver_layer@ 
+
+NumCopSlivErr%	= number_slivers!
+NumCopSlivErr$	= str$(NumCopSlivErr%)
+
+'Save error report:
+if NumCopSlivErr% > 0 then
+	CopSlivReport$	= ReportName$ + "_CopSlivErr.rpt"
+	report_slivers@
+	report_slivers_save@ 0,0,CopSlivReport$
+end if
+
+close_msg
+return
+
+8035
+'************************************************
+'*	TURN ON LAYERS SUBROUTINE	        *
+'************************************************
+
+'Routine turns on the selected layers for the Acid Traps and Sliver check subroutines
+
+select case TempSrch%
+
+	case Choice1%			'check only top and bottom layers
+
+		setlayer@ Top%
+		layer_alloff@ True%
+		view_redraw@
+
+
+		setlayer@ Bot%
+		view_redraw@
+		if Top% = -1 then layer_alloff@ True%
+
+	case Choice2%			'check only internal layers
+
+		if IntCount% > False% then
+
+			setlayer@ Int%(1)
+			layer_alloff@ True%
+			view_redraw@
+
+			for E = 2 to V			'use Int layer counter values from Layer counting subroutine
+				setlayer@ Int%(E)
+			next
+			view_redraw@
+		else
+			IntError% = True%
+		end if
+
+	case Choice3%			'check only plane layers
+
+		
+		'	Check to see which initial layer to open, and then increment arrays accordingly
+		if NegCount% > False% then
+			setlayer@ Neg%(1)
+			layer_alloff@ True%
+			view_redraw@	
+
+			NG = 2
+			PS = 1
+		else
+			if PosCount% > False% then	
+				setlayer@ Pos%(1)
+				layer_alloff@ True%
+				view_redraw@	
+
+				PS = 2
+			end if
+		else
+			PlaneError% = True%
+		end if
+
+		for E = NG to X			'use Neg plane counter values from Layer counting subroutine
+			setlayer@ Neg%(E)
+			gosub 8092
+		next
+
+		for E = PS to Y			'use Pos plane counter values from Layer counting subroutine
+			setlayer@ Pos%(E)
+			gosub 8092
+		next
+
+		view_redraw@
+
+	case Choice4%			'Top, Bottom, Internals and Planes
+
+		setlayer@ Top%
+		layer_alloff@ True%
+		view_redraw@
+
+		setlayer@ Bot%
+		if Top% = -1 then layer_alloff@ True%
+
+		for E = 2 to V			'use Int layer counter values from Layer counting subroutine
+			setlayer@ Int%(E)
+		next
+
+		for E = 1 to X			'use Neg plane counter values from Layer counting subroutine
+			setlayer@ Neg%(E)
+			gosub 8092
+		next
+
+		for E = 1 to Y			'use Pos plane counter values from Layer counting subroutine
+			setlayer@ Pos%(E)
+			gosub 8092
+		next
+
+		view_redraw@
+
+end select
+
+view_all@
+view_redraw@
+
+return
+
+
+8040
+'************************************************
+'*	MASK SLIVERS CHECK SUBROUTINE 	        *
+'************************************************
+
+'Pre-set Variable Defaults:
+'These variables were previously retrieved from agent file:
+'MaskFind#	= 8.0		'find slivers less than n mil in size
+'MaskFixSliv%	= 1		'fix slivers or not
+'MaskRemOld%	= 1		'remove old slivers
+'MaskProc%	= 1		'process only ON mask layers
+'MaskSrch%	= 1		'area to search for slivers
+Error%		= False%
+
+print_msg "RUNNING MASK SLIVERS ANALYSIS"
+
+'Turn on selected layers from agent file:
+
+'	Use TOP, BOTTOM, or BOTH
+select case MaskSrch%
+
+	case Choice1%	'Top layer
+		setlayer@ TMask%
+		layer_alloff@ True%
+		view_redraw@
+
+		if TMask% = -1 then Error% = True%
+
+	case Choice2%	'Bottom layer
+		setlayer@ BMask%
+		layer_alloff@ True%
+		view_redraw@
+
+		if BMask% = -1 then Error% = True%
+
+
+	case Choice3%	'BOTH
+		setlayer@ TMask%
+		layer_alloff@ True%
+		view_redraw@
+
+		setlayer@ BMask%
+		if TMask% = -1 then
+			if BMask% = -1 then Error% = True%
+		else
+			if BMask% > -1 then layer_alloff@ True%
+		end if
+		view_redraw@
+		
+
+end select
+
+if Error% = True% then
+	print "No Mask layers to test for slivers in this design!"
+	return
+end if
+
+sliverdetectmask@
+setsliverparms@ 1.0000,MaskFind#,MaskProc%,MaskRemOld%
+setsliverfix@ MaskFixSliv%
+sliver_layer@ 
+
+'Determine # of Errors:
+NumMaskSlivErr%	= number_slivers!
+NumMaskSlivErr$	= str$(NumMaskSlivErr%)
+
+'Save error report:
+if NumMaskSlivErr% > 0 then
+	MaskSlivReport$	= ReportName$ + "_MaskSlivErr.rpt"
+	report_slivers@
+	report_slivers_save@ 0,0,MaskSlivReport$
+end if
+
+close_msg
+return
+
+
+8050
+'************************************************
+'*	FIND SOLDER BRIDGES CHECK SUBROUTINE    *
+'************************************************
+
+'These variables were previously retrieved from agent file:
+'	SoldTop%		find bridges on top layer
+'	SoldBot%		find bridges on bottom layer
+'	SoldDist#		bridge distance
+'	SoldDelOld%		remove existing errors
+'	SoldRepair%		user selects type of repair (error list/fix mask layer)
+'	SoldSrch%		area to search for solder bridges
+
+TopSoldErr%		= 0
+BotSoldErr%		= 0
+TotSoldErr%		= 0
+SoldErr%		= False%
+
+print_msg "RUNNING FIND SOLDER BRIDGES ANALYSIS"
+
+'Run on selected layers:
+'	TOP layer
+if SoldTop% > 1 then
+	if TMask% > -1 then 
+		dfm_solder_bridges@
+		set_solderbridgeparms@ SoldDist#,SoldRepair%,SoldDelOld%
+		solder_bridge_layer@ TMask%,Top%
+
+		TopSoldErr%	= number_solder_bridges!
+	else
+		SoldErr%	= True%
+	end if
+end if
+
+'	BOTTOM layer
+if SoldBot% > 1 then
+	if BMask% > -1 then
+		dfm_solder_bridges@
+		set_solderbridgeparms@ SoldDist#,SoldRepair%,SoldDelOld%
+		solder_bridge_layer@ BMask%,Bot%
+
+		BotSoldErr%	= number_solder_bridges!
+	else
+		SoldErr%	= True%
+	end if
+end if
+
+'Determine # of Errors:
+TotSoldErr%	= TopSoldErr% + BotSoldErr%
+TotSoldErr$	= str$(TotSoldErr%)
+
+'Save error report:
+if TotSoldErr% > 0 then
+	SoldReport$		= ReportName$ + "_SoldErr.rpt"
+	report_solderbridges@
+	report_solder_bridges_save@ 0,0,SoldReport$
+end if
+
+close_msg
+return
+
+
+8060
+'************************************************
+'*	STARVED THERMALS CHECK SUBROUTINE	*
+'************************************************
+
+'These variables were previously retrieved from agent file:
+'	ThermClr%		thermal clearance in % of tie width
+'	ThermMinClr%		min. number of clear ties (every, or 1 - 4, as selections)
+'	ThermDelOld%		remove existing errors
+'	ThermLayChk%		layers to check (on neg plane layers or all neg plane layers)
+
+print_msg "RUNNING STARVED THERMALS ANALYSIS"
+
+starved_thermals@
+starved_thermals_layer1@ ThermClr%,ThermDelOld%,ThermMinClr%,ThermLayChk%
+
+'Determine # of Errors:
+NumThermErr%	= number_starved_thermals!
+NumThermErr$	= str$(NumThermErr%)
+
+'Save error report:
+if NumThermErr% > 0 then
+	ThermReport$	= ReportName$ + "_ThermErr.rpt"
+	report_starved_thermals@
+	report_starved_thermals_save@ 0,0,ThermReport$
+end if
+
+close_msg
+return
+
+
+8070
+'************************************************
+'*   SILK TO SOLDER SPACING CHECK SUBROUTINE	*
+'************************************************
+
+
+'These variables were previously retrieved from agent file:
+'	SilkLay%		silkscreen layers to check against
+'	SilkClear#		clearance to check against
+'	SilkDelOld%		remove existing errors
+'	SilkAp$			dcode filter entries
+
+print_msg "RUNNING SILK TO SOLDER MASK ANALYSIS"
+
+Select case SilkLay%		'Determine which outer and mask layers to compare
+
+	Case Choice1%			
+		checksilk@ Top%,TMask%,SilkClear#,SilkDelOld%,SilkAp$	'Check top vs. top mask
+
+	Case Choice2%
+		checksilk@ Bot%,BMask%,SilkClear#,SilkDelOld%,SilkAp$	'Check bottom vs. bottom mask
+	
+	Case Choice3%
+		checksilk@ Top%,TMask%,SilkClear#,SilkDelOld%,SilkAp$	'Check BOTH
+		checksilk@ Bot%,BMask%,SilkClear#,SilkDelOld%,SilkAp$
+end select		
+		
+
+'Determine # of Errors:
+NumSilk2SoldErr%	= 0	'REPLACE with silk to solder query
+NumSilk2SoldErr$	= str$(NumSilk2SoldErr%)
+
+close_msg
+return
+
+
+8080
+'************************************************
+'* SOLDER MASK TO TRACE SPACING CHECK SUBROUTINE *
+'************************************************
+
+'Runs Solder Mask to Trace Spacing check
+
+'These variables were previously retrieved from agent file:
+'	SMaskLay%		solder mask layers to check against
+'	SMaskClear#		clearance to check against
+'	SMaskDelOld%		remove existing errors
+'	SMaskAp$		dcode filter entries
+
+print_msg "RUNNING SOLDER MASK TO TRACE ANALYSIS"
+
+Select case SMaskLay%		'Determine which outer and mask layers to compare
+
+	Case Choice1%			
+		checksold2elec@ TMask%,Top%,SMaskClear#,SMaskDelOld%,SMaskAp$	'Check top vs. top mask
+
+	Case Choice2%
+		checksold2elec@ BMask%,Bot%,SMaskClear#,SMaskDelOld%,SMaskAp$	'Check bottom vs. bottom mask
+	
+	Case Choice3%
+		checksold2elec@ TMask%,Top%,SMaskClear#,SMaskDelOld%,SMaskAp$	'Check BOTH
+		checksold2elec@ BMask%,Bot%,SMaskClear#,SMaskDelOld%,SMaskAp$
+end select
+
+'Determine # of Errors:
+NumSold2TraceErr%	= 0	'REPLACE with solder to trace query
+NumSold2TraceErr$	= str$(NumSold2TraceErr%)
+
+CLOSE_MSG
+return
+
+
+8090
+'************************************************
+'*		DRC CHECKING SUBROUTINE	        *
+'************************************************
+
+'Runs all DRC checks, using layers selected by user in agent file
+'	- collates total # of errors after all checks have run
+
+'These variables were previously retrieved from agent file:
+
+'Clearances -
+
+'	DRCT2T%			Run min track to track test
+'	DRCTrk2Trk#		min. track to track spacing allowable
+'	DRCTrk2TrkAp$		dcode to dcode to check for min track to track
+
+'	DRCT2P%			Run min track to pad test
+'	DRCTrk2Pad#		min. track to pad spacing allowable
+'	DRCTrk2PadAp$		dcode to dcode to check for min track to pad 
+
+'	DRCP2P%			Run min pad to pad test
+'	DRCPad2Pad#		min. pad to pad spacing allowable
+'	DRCPad2PadAp$		dcode to dcode to check for min pad to pad
+
+'	DRCOutC%		Run border check
+'	DRCOut#			min. border to data spacing allowable
+
+'	DRCTrkWidC%		Run track width check
+'	DRCTrkWid#		min. track width allowable
+
+'	DRCPadC%		Run pad size check
+'	DRCPad#			min. pad size allowable
+
+'	DRCRedunP%		Run check for redundant pads
+
+'Layers to Test -
+	
+'	DRCLayChk(n)%		array to track which layers to run DRC clearance checks on
+
+'Annular Ring Checks - 
+
+'	DRCPad2Mk%		Run pad to mask check
+'	DRCP2M#			min. ring width between pad to mask
+'	DRCP2MAp$		dcode to check for min pad to mask ring
+
+'	DRCDrl2Mk%		Run drill to mask check
+'	DRCD2M#			min. ring width between drill to mask
+'	DRCD2MAp$		dcode to check for min drill to mask ring
+
+'	DRCDrl2Pad%		Run drill to pad check
+'	DRCD2P#			min. ring width between drill to pad
+'	DRCD2PAp$		dcode to check for min drill to pad ring
+'	DRCD2PAp%(n)		array of dcodes to check for min drill to pad ring
+
+'	DRCPadLayExe%		pad layer to check against
+'	DRCPadLayExe$(n)		pad layers to display to user
+'	DRCMskLayExe%		mask layer to check against
+'	DRCMskLayExe$(n)		mask layers to display to user
+'	DRCDrlLayExe%		drill layer to check against
+'	DRCDrlLayExe$(n)		drill layers to display to user
+
+
+
+'	Special Checks -
+
+'	DRCDwoP%		Run drills w/o pad check
+'	DRCPwoD%		Run pads w/o drills check
+'	DRCDP2Tk%		Run drills w/o pad to track check
+'	DRCDP2Track#		min. drills w/o pads to track spacing allowable
+
+'	DRCSpPadLayExe%		special check pad layer to check against
+'	DRCSpPadLayExe$(n)		special check pad layer to display to user
+'	DRCSpDrlLayExe%		special check drill layer to check against
+'	DRCSpDrlLayExe$(n)		special check drill layer to display to user
+'	DRCSTrkLay%		special check track layer to check against
+'	DRCSpTrkLayExe$(n)		special check track layer to display to user
+
+'Error handling -
+
+'	DRCDelErrFile$		old DRC error file
+
+DRCDelOld%	= True%					'remove existing DRC errors
+DRCDelErr%	= True%					'remove existing DRC error file
+'DRCReport$ 	= ReportName$ + "_DRCerrors.drc"		'save error report in same directory as database
+BorX# 		= vismaxx!
+BorY# 		= vismaxy!
+BorMinX# 	= visminx!
+BorMinY# 	= visminy!
+
+print_msg "RUNNING DRC ANALYSIS"
+
+util_drc@
+
+'remove old error file
+if DRCDelErr% = True% then drc_deletefile@ DRCReport$
+
+axy@ BorMinX#,BorY#				'used database extent values derived from design border
+axy@ BorX#,BorMinY#
+
+'delete old errors
+if DRCDelOld% = True% then drc_deleteall@
+
+'Run SPACING CHECKS on TOP, BOTTOM & INTERNAL Layers
+
+select case DRCClearLay%		'check which layers to test for clearances
+
+	case Choice1%	'Top layer
+		RLay%	= Top%
+		gosub 8092
+
+	case Choice2%	'Bottom layer
+		RLay%	= Bot%
+		gosub 8092
+
+	case Choice3%	'BOTH
+		RLay%	= Top%
+		gosub 8092
+
+		RLay%	= Bot%
+		gosub 8092
+end select
+		
+
+'	INTERNAL layers
+
+if DRCClearInt% = True% then
+	for E = 1 to V			'use Int layer counter values from Layer counting subroutine
+		RLay%	= Int%(E)
+		gosub 8092
+	next
+end if
+
+'	PLANE layers
+
+if DRCClearNeg% = True% then
+	for E = 1 to X			'use Neg plane counter values from Layer counting subroutine
+		RLay%	= Neg%(E)
+		gosub 8092
+	next
+
+	for E = 1 to Y			'use Pos plane counter values from Layer counting subroutine
+		RLay%	= Pos%(E)
+		gosub 8092
+	next
+end if
+
+'
+
+
+'Run ANNULAR RING CHECKS on all appropriate layers
+
+select case DRCPadLayExe%
+
+	case Choice1%		'Check Top to Top Mask only
+
+		PadLay% 	= Top%
+		MskLay%		= TopMask%
+		DrlLay%		= drilllayer!
+		gosub 8095
+
+	case Choice2%		'check Bottom to Bottom Mask only
+
+		PadLay% 	= Bot%
+		MskLay%		= BotMask%
+		DrlLay%		= drilllayer!
+		gosub 8095
+
+	case Choice3%		'check BOTH
+
+		PadLay% 	= Top%
+		MskLay%		= TopMask%
+		DrlLay%		= drilllayer!
+		gosub 8095
+
+		PadLay% 	= Bot%
+		MskLay%		= BotMask%
+		DrlLay%		= drilllayer!
+		gosub 8095		
+
+end select
+
+
+
+'Run SPECIAL CHECKS on all appropriate layers:
+
+'Using layers specified in the agent file
+'	- Pad layers are the same as for Spacing checks
+'	- Drill layer is plated drill
+'	- Trace layer is agent specified = internals or top & bottom
+
+DRCSpPadLayExe%	= drilllayer!
+
+'	Use TOP, BOTTOM, or BOTH
+select case DRCClearLay%		'check which layers to test for clearances
+
+	case Choice1%	'Top layer
+		PadLay%	= Top%
+		if DRCSpTrkLayExe% = Choice1% then DRCSTrkLay% = Top%
+		gosub 8097
+
+	case Choice2%	'Bottom layer
+		PadLay%	= Bot%
+		if DRCSpTrkLayExe% = Choice1% then DRCSTrkLay% = Bot%
+		gosub 8097
+
+	case Choice3%	'BOTH
+		PadLay%	= Top%
+		if DRCSpTrkLayExe% = Choice1% then DRCSTrkLay% = Top%
+		gosub 8097
+
+		PadLay%	= Bot%
+		if DRCSpTrkLayExe% = Choice1% then DRCSTrkLay% = Bot%
+		gosub 8097
+end select
+
+'	Use INTERNAL layers
+
+if DRCClearInt% = True% then
+	for E = 1 to V			'use Int layer counter values from Layer counting subroutine
+		PadLay%	= Int%(E)
+		'use Internals as track layers, if requested
+		if DRCSpTrkLayExe% = Choice2% then DRCSTrkLay% = Int%(E)	
+		gosub 8097
+	next
+end if
+
+'	Use PLANE layers
+
+if DRCClearNeg% = True% then
+	for E = 1 to X			'use Neg plane counter values from Layer counting subroutine
+		PadLay%	= Neg%(E)
+		gosub 8097
+	next
+
+	for E = 1 to Y			'use Pos plane counter values from Layer counting subroutine
+		PadLay%	= Pos%(E)
+		gosub 8097
+	next
+end if
+
+end@
+
+'Determine # of Errors:
+NumDRCErr%	= number_drc_errors!
+NumDRCErr$	= str$(NumDRCErr%)
+
+if NumDRCErr% > 0 then
+	DRCReport$ 	= ReportName$ + "_DRCerrors.drc"
+	drc_seterrorfile@ DRCReport$
+end if
+
+close_msg
+return
+
+8092
+'************************************************
+'*	DRC CHECKS - SPACING SUBROUTINE	        *
+'************************************************
+
+'Runs only the DRC spacing checks on the layer specified by the calling routine
+
+'track to track
+if DRCT2T% then drc_trktrk@ 0,RLay%, DRCTrk2Trk#, DRCTrk2TrkAp$		
+	
+'track to pad
+if DRCT2P% then drc_trkpad@ 0,RLay%, DRCTrk2Pad#, DRCTrk2PadAp$	
+
+'pad to pad
+if DRCP2P% then drc_padpad@ 0,RLay%, DRCTrk2Pad#, DRCTrk2PadAp$		
+
+'outline to layer
+if DRCOutC% then drc_outline@ 0,RLay%,Border%,DRCOut#			
+
+'min track width
+if DRCTrkWidC% then drc_mintrk@ 0,RLay%,DRCTrkWid#			
+
+'min pad size
+if DRCPadC% then drc_minpad@ 0,RLay%,DRCPad#				
+
+'redundant pads
+if DRCRedunP% then drc_redunpad@ 0,RLay%				
+
+return
+
+
+8095
+'************************************************
+'*  DRC CHECKS - ANNULAR RING SUBROUTINE        *
+'************************************************
+
+'Runs only the DRC annular ring checks on the layers specified by the calling routine
+
+drc_anringpaddata@ PadLay%, DRCP2MAp$			'pad to mask ann. ring	
+
+drc_anringmaskdata@ MskLay%, DRCD2MAp$			'mask to drill ann. ring
+
+drc_anringdrilldata@ DrlLay%, DRCD2PAp$			'drill to pad ann. ring
+
+drc_anringpadmask@ DRCP2M#
+
+drc_anringdrillmask@ DRCD2M#
+
+drc_anringdrillpad@ DRCD2P#
+
+return
+
+
+8097
+'************************************************
+'*  DRC CHECKS - SPECIAL TESTS SUBROUTINE       *
+'************************************************
+
+
+'drills w/o pads
+if DRCDwoP% = True% then drc_drillwopad@ DRCSpDrlLayExe%, DRCSpPadLayExe%		
+
+'pads w/o drills
+if DRCPwoD% = True% then drc_padwodrill@ DRCSpPadLayExe%, DRCSpDrlLayExe%		
+
+
+if DRCDP2Tk% = True% then
+	'drills (w/o pads) to track
+	if DRCSTrkLay% > -1 then drc_drltrk@ DRCSpDrlLayExe%, DRCSTrkLay%, DRCDP2Track#	
+end if
+
+return
+
+
+8100
+'************************************************
+'*		NET CHECK SUBROUTINE	        *
+'************************************************	
+
+'Runs Netcheck on design and returns # of errors found.
+'	- checks to be sure nets exist, otherwise issues error
+
+NetError% 	= False%
+NetErrNum%	= False%
+
+'These variables were previously retrieved from agent file:
+'NetMethod%	= 2		'type of netcheck to run
+'NetChkShrt%	= 0		'check for net shorts (true shape netcheck only)
+'NetChkAnt%	= 1		'check for antennae
+'NetChkSel%	= 1		'which nets to check (all or selected)
+
+print_msg "RUNNING NET CHECK ANALYSIS"
+
+if NumNets% > 0 then
+	NetErr% = highestlayer! + 2
+	NetErr$ = str$(NetErr%)
+	util_net_check@
+	setnetextrparm@ NetMethod%
+	setnetcheckparms@ NetChkSel%,NetChkShrt%,NetChkAnt%
+
+	NetErrNum%	= False		'REPLACE with # netcheck errors query
+else
+	NetErrors%	= True%		'no nets in design
+	NetErrNum%	= False%	
+end if
+
+'Determine # of Errors:
+NumNetChkErr%	= 0		'REPLACE with pending query
+NumNetChkErr$	= str$(NumNetChkErr%)
+
+'Note errors:
+if NumNetChkErr% > 0 then
+	NetChkReport$	= "refer to Net Check layer in job design"	'ReportName$ + "_NetErr.rpt"
+end if
+
+close_msg
+return
+
+
+8110
+'************************************************
+'*  NEGATIVE PLANE THERMAL CHECK SUBROUTINE     *
+'************************************************	
+
+'Runs Negative Plane Thermal Check on design and returns # of errors found.
+
+print_msg "RUNNING NEGATIVE PLANE THERMAL CONFLICTS CHECK ANALYSIS"
+
+
+
+'REPLACE when macro command for this command is available.
+
+
+
+'Determine # of Errors:
+NumNegPlnErr%	= 0		'REPLACE with pending query
+NumNegPlnErr$	= str$(NumNetChkErr%)
+
+close_msg
+return
+
+
+8120
+'************************************************
+'*	    COPPER AREA CHECK SUBROUTINE        *
+'************************************************
+
+
+'Checks for the copper area of top and bottom layers, using values specified by MRC agent
+
+'Most variables were previously retrieved from agent file:
+'CopARes#	= 5.0		'search resolution setting
+'CopAScan#	= 1000		'scan box size
+'CopADrill%	= 0		'check area with drills
+if BrdThick# > 0 then
+	CopAThick#	= BrdThick#	'board thickness from user (used on copper checks with drills)
+else
+	CopAThick#	= 62		'default setting
+end if
+
+'Set unit to display in report:
+if Unit$ = "MM" then
+	TempUnit$ = " SQ MM"
+else
+	TempUnit$ = " SQ INCH"
+end if	
+
+print_msg "DETERMINING COPPER AREA"
+
+if Top% > -1 then
+	setlayer@ Top%
+	layer_alloff@ True%
+	view_all@
+	view_redraw@
+
+	util_copper@
+	copper@ CopARes#,CopAScan#,CopADrill%,CopAThick#
+	back@
+
+	TopCop#		= copperarea!
+	TopCop$		= fmtusing$(PresFMT$,TopCop#)
+	TopCop$		= TopCop$ + TempUnit$
+else
+	TopCop$		= "N/A"
+end if
+
+if Bot% > -1 then 
+	setlayer@ Bot%
+	layer_alloff@ True%
+	view_all@
+	view_redraw@
+
+	util_copper@
+	copper@ CopARes#,CopAScan#,CopADrill%,CopAThick#
+	back@
+
+	BotCop#		= copperarea!
+	BotCop$		= fmtusing$(PresFMT$,BotCop#)
+	BotCop$		= BotCop$ + TempUnit$
+else
+	BotCop$		= "N/A"
+end if
+
+close_msg
+return
+
+
+8130
+'************************************************
+'*		DRILL CHECK SUBROUTINE	        *
+'************************************************
+
+'Checks drill layer, if present, for errors
+
+'These variables were previously retrieved from agent file:
+'DrillOverChk%	= 1
+'DrillCoinChk%	= 1
+'DrillCoinDel%	= 1
+'DrillRedChk%	= 1
+'DrillRedDel%	= 1
+'DrillHol2Hol%	= 1
+'DrillHol2HolClr# = 10.0
+'DrillDelOld%	= 1
+
+if DrillCount% > 0 then
+	print_msg "RUNNING DRILL CHECK ANALYSIS"
+	Delay 5000
+
+	delete_error_list@ 5,DrillLayChk%		'5 = drill error list #; internal to Cam350, no need to use variable
+	nc_set_fix_drill_errors@ DrillCoinDel%, DrillRedDel%
+	nc_analysis_drill_errors@ DrillLayChk%, DrillOverChk%, DrillRedChk%, DrillCoinChk%, DrillHol2HolClr#
+
+	close_msg
+	NumDrillErr%	= 0	'REPLACE with proper query
+else
+	NumDrillErr%	= 0
+end if
+
+'Determine # of Errors:
+NumDrillErr$	= str$(NumDrillErr%)
+
+'Save error report:
+if NumDrillErr% > 0 then
+	DrillReport$	= ReportName$ + "_DrillErr.rpt"
+	report_drill_errors@
+	report_drill_errors_save@ 0,0,DrillReport$
+end if
+
+return
+
+
+8140
+'************************************************
+'*		MILL CHECK SUBROUTINE 	       *
+'************************************************	
+
+'Checks mill layer, if present, for errors
+
+'These variables were previously retrieved from agent file:
+'MillArcChk%	= 1
+'MillPathChk%	= 1
+'MillTabChk%	= 1
+'MillDelOld%	= 1
+
+if Mill% > -1 then 
+	print_msg "RUNNING MILL CHECK ANALYSIS"
+
+	delete_error_list@ 6,MillLayChk%		'6 = mill error list #; internal to Cam350, no need to use variable
+	nc_analysis_mill_errors@ MillLayChk%, MillArcChk%, MillPathChk%, MillTabChk%
+
+	close_msg
+
+	NumMillErr%	= 0	'REPLACE with proper query
+else
+	NumMillErr%	= 0
+end if
+
+'Determine # of Errors:
+NumMillErr$	= str$(NumMillErr%)
+
+'Save error report:
+if NumMillErr% > 0 then
+	DrillReport$	= ReportName$ + "_MillErr.rpt"
+	report_mill_errors@
+	report_mill_errors_save@ 0,0,MillReport$
+end if
+
+return
+
+
+
+
+8500
+'************************************************
+'*  MRC REPORT - PAGE 2 CREATION SUBROUTINE     *
+'************************************************
+
+'This subroutine creates page two of the MRC Report by copying page 1 (identical to Quote Report)
+'and deleting unnecessary sections of the report
+
+NewTitle$	= "MRC REPORT (page 2 of 2)"
+
+'Create new layer for page 2
+edit_layer@ ReportLay2%,3,3,4,0,ReportLay2$		'change page 2 color
+
+'Copies page 1 to new layer.
+setlayer@ ReportLay%
+layer_alloff@ 1
+view_all@
+view_redraw@
+
+edit_copy@
+setsnap@ 1
+edit_selectall2@ 
+setcoplayer@ ReportLay2%,1
+copy_to_layer@ 
+back@
+setsnap@ 0
+
+setlayer@ ReportLay2%
+layer_alloff@ 1
+view_all@
+view_redraw@
+
+'Delete superfluous sections of first report page:
+edit_delete@
+setsnap@ 1
+setsnap@ 0
+edit_group@
+axy@ 2571.4000,7938.3000
+axy@ 4928.6000,7550.8000
+axy@ -431.4000,7873.7000
+axy@ 8367.3000,-134.0000
+back@
+delete_edits@ 4,1
+back@
+setsnap@ 0
+
+'Modify text of Report Title
+textfullheight@ Large%			'use large text
+
+change_text@
+setsnap@ 1
+axy@ 3584.3000,9585.1000
+textfontface@ 2,"Times New Roman"
+edit_chgtext@ NewTitle$
+view_redraw@
+return
+
+
+8550
+'************************************************
+'*     MRC REPORT - PAGE 2 ADD GRAPHICS/LABELS	*
+'************************************************
+
+'This subroutine adds all necessary lines and labels to new tables for page 2
+'	- MRC Analysis Table will include all Analysis tests done on database
+
+'1 ) Draw table graphics:
+
+setdcode@ Thick%
+
+setlayer@ ReportLay2%
+layer_alloff@ True%
+view_all@
+view_redraw@
+
+'	Draw rectangles, relative to origin in lower left
+add_rectangle@
+axy@ 0.0000,7793.0000
+axy@ 7500.0000,1669.0000
+axy@ 0.0000,6992.5000
+back@
+end@
+
+'	Draw lines, still using thick ap
+
+add_line@
+axy@ 0.0000,6992.5000
+setortho@ 0
+axy@ 7500.0000,6992.5000
+back@
+
+'	Draw remaining lines, using thinner dcode
+setdcode@ Thin%
+update_dcodebar@ 
+
+axy@ 0.0000,6653.5000
+axy@ 7500.0000,6653.5000
+back@
+axy@ 0.0000,6298.0000
+axy@ 7500.0000,6298.0000
+back@
+axy@ 0.0000,5910.8000
+axy@ 7500.0000,5910.8000
+back@
+axy@ 0.0000,5543.0000
+axy@ 7500.0000,5543.0000
+back@
+axy@ 0.0000,5218.0000
+axy@ 7500.0000,5218.0000
+back@
+axy@ 0.0000,4879.0000
+axy@ 7500.0000,4879.0000
+back@
+axy@ 0.0000,4523.5000
+axy@ 7500.0000,4523.5000
+back@
+axy@ 0.0000,4136.3000
+axy@ 7500.0000,4136.3000
+back@
+axy@ 0.0000,3768.5000
+axy@ 7500.0000,3768.5000
+back@
+axy@ 0.0000,3443.5000
+axy@ 7500.0000,3443.5000
+back@
+axy@ 0.0000,3104.5000
+axy@ 7500.0000,3104.5000
+back@
+axy@ 0.0000,2749.0000
+axy@ 7500.0000,2749.0000
+back@
+axy@ 0.0000,2361.8000
+axy@ 7500.0000,2361.8000
+back@
+axy@ 0.0000,1994.0000
+axy@ 7500.0000,1994.0000
+back@
+axy@ 2858.8000,7331.6000
+axy@ 7500.0000,7331.6000
+back@
+axy@ 2858.8000,7331.6000
+axy@ 2858.8000,1661.2000
+back@
+axy@ 3750.0000,7331.6000
+axy@ 3750.0000,1661.2000
+back@
+back@
+
+'2) Create Text Labels:
+
+'Change text settings:
+textfontface@ 2,"Times New Roman"
+
+textjust@ Just%
+textfullheight@ Large%			'use large text
+
+addtext@ 3750.0000,7568.0000,4573.7012,7568.0000,"MRC ANALYSIS RESULTS"
+
+textfullheight@ Medium%			'use medium text
+
+addtext@ 3284.6000,7168.0000,3581.9016,7168.0000,"# of Errors"
+addtext@ 5500.0000,7150.0000,6184.1232,7150.0000,"Location of Error Report"
+
+textjust@ Left%
+textfullheight@ Small%			'use medium text
+
+addtext@ 133.6000,6806.9000,930.6319,6806.9000,"ACID TRAPS"
+addtext@ 125.0000,6468.0000,1234.8161,6468.0000,"COPPER SLIVERS"
+addtext@ 125.0000,6093.0000,1112.7112,6093.0000,"MASK SLIVERS"
+addtext@ 125.0000,5718.0000,1280.3861,5718.0000,"SOLDER BRIDGES"
+addtext@ 125.0000,5368.0000,1531.9807,5368.0000,"STARVED THERMALS"
+addtext@ 133.6000,5032.4000,2436.8228,5032.4000,"SILK TO SOLDER MASK SPACING"
+addtext@ 125.0000,4693.5000,2412.9324,4693.5000,"SOLDER MASK TO TRACE SPACING"
+addtext@ 125.0000,4318.5000,407.2307,4318.5000,"DRC"
+addtext@ 125.0000,3943.5000,891.3135,3943.5000,"NET CHECK"
+addtext@ 125.0000,3593.5000,2851.0885,3593.5000,"NEGATIVE PLANE THERMAL CONFLICTS"
+addtext@ 133.6000,3257.9000,968.5427,3257.9000,"DRILL CHECK"
+addtext@ 125.0000,2919.0000,1028.5719,2919.0000,"MILL CHECK"
+
+'	Save code for future additions to Analysis Commands
+'	addtext@ 125.0000,2544.0000,590.1961,2544.0000,"SMALL"
+'	addtext@ 125.0000,2169.0000,696.9008,2169.0000,"MEDIUM"
+'	addtext@ 125.0000,1819.0000,582.4822,1819.0000,"LARGE"
+back@
+
+view_all@
+view_redraw@
+close_msg
+return
+
+
+8600
+'************************************************
+'*  MRC REPORT - COPPPER TABLE SUBROUTINE       *
+'************************************************
+
+'Adds the copper area box to the MRC Report - Page 2
+
+'1) Add lines for Copper Area Box
+setdcode@ Thick%
+update_dcodebar@ 
+
+add_rectangle@
+axy@ 0.0000,1450.0000
+axy@ 7500.0000,400.0000
+back@
+
+add_line@
+axy@ 0.0000,1050.0000
+axy@ 7500.0000,1050.0000
+back@
+
+setdcode@ Thin%
+update_dcodebar@ 
+
+axy@ 0.0000,700.0000
+axy@ 7500.0000,700.0000
+back@
+axy@ 3750.0000,1050.0000
+axy@ 3750.0000,400.0000
+back@
+back@
+
+'2) Add text to the box
+textfontface@ 2,"Times New Roman"
+textjust@ Just%			'Centered text
+textfullheight@ Large%
+
+add_text@
+addtext@ 3750.0000,1225.0000,4265.3750,1225.0000,"COPPER AREA"
+
+textjust@ Left%			'Left justified text
+textfullheight@ Medium%
+
+addtext@ 125.0000,850.0000,700.4146,850.0000,"Top Layer"
+addtext@ 125.0000,550.0000,891.1489,550.0000,"Bottom Layer"
+back@
+return
+
+
+
+8700
+'************************************************
+'*  	MRC REPORT - ADD TEXT SUBROUTINE        *
+'************************************************
+
+'Add all Analysis and Copper Area variables to page 2 of the MRC report
+
+textfont@ "SIMPLE.EFN"
+textjust@ Just%
+textfullheight@ Medium%			'use medium text
+
+'	Add text to MRC Analysis Table
+addtext@ 3325.0000,6800.0000,3372.5000,6800.0000,NumAcidErr$
+addtext@ 3325.0000,6475.0000,3372.5000,6475.0000,NumCopSlivErr$
+addtext@ 3325.0000,6075.0000,3372.5000,6075.0000,NumMaskSlivErr$
+addtext@ 3325.0000,5725.0000,3372.5000,5725.0000,TotSoldErr$
+addtext@ 3325.0000,5375.0000,3372.5000,5375.0000,NumThermErr$
+addtext@ 3325.0000,5025.0000,3372.5000,5025.0000,NumSilk2SoldErr$
+addtext@ 3325.0000,4700.0000,3372.5000,4700.0000,NumSold2TraceErr$
+addtext@ 3325.0000,4325.0000,3372.5000,4325.0000,NumDRCErr$
+addtext@ 3325.0000,3950.0000,3372.5000,3950.0000,NumNetChkErr$
+addtext@ 3325.0000,3600.0000,3420.0000,3600.0000,NumNegPlnErr$
+addtext@ 3325.0000,3275.0000,3420.0000,3275.0000,NumDrillErr$
+addtext@ 3325.0000,2900.0000,3420.0000,2900.0000,NumMillErr$
+
+'	These lines are saved for future additions to Analysis Menu
+'	which will be added to table.
+'	addtext@ 3325.0000,2550.0000,3420.0000,2550.0000,""
+'	addtext@ 3325.0000,2200.0000,3420.0000,2200.0000,""
+'	addtext@ 3325.0000,1850.0000,3420.0000,1850.0000,""
+
+'	Add text to Copper Area Table
+addtext@ 5575.0000,850.0000,5826.5750,850.8000,TopCop$
+addtext@ 5575.0000,550.0000,5838.6250,550.0000,BotCop$
+
+textjust@ Left%
+textfullheight@ Tiny%
+textlspace@ 50.0000
+
+'	Add error report filenames to MRC Analysis Table
+addtext@ 3875.0000,6875.0000,3965.2500,6800.0000,AcidReport$
+addtext@ 3875.0000,6550.0000,3965.2500,6475.0000,CopSlivReport$
+addtext@ 3875.0000,6150.0000,4055.5000,6075.0000,MaskSlivReport$
+addtext@ 3875.0000,5600.0000,4060.2500,5725.0000,SoldReport$
+addtext@ 3875.0000,5450.0000,4060.2500,5375.0000,ThermReport$
+addtext@ 3875.0000,5100.0000,4060.2500,5025.0000,"N/A"
+addtext@ 3875.0000,4775.0000,4060.2500,4700.0000,"N/A"
+addtext@ 3875.0000,4400.0000,4060.2500,4325.0000,DRCReport$
+addtext@ 3875.0000,4025.0000,4060.2500,3950.0000,NetReport$
+addtext@ 3875.0000,3675.0000,4155.2500,3600.0000,"N/A"
+addtext@ 3875.0000,3350.0000,4155.2500,3275.0000,DrillReport$
+addtext@ 3875.0000,2975.0000,4155.2500,2900.0000,MillReport$
+
+'	These lines are saved for future additions to Analysis Menu
+'	which will be added to table.
+'	addtext@ 3875.0000,2550.0000,4155.2500,2550.0000,""
+'	addtext@ 3875.0000,2200.0000,4155.2500,2200.0000,""
+'	addtext@ 3875.0000,1850.0000,4155.2500,1850.0000,""
+back@
+return
+
+
+8800
+'************************************************
+'*  	MRC REPORT - DISPLAY INFO SUBROUTINE    *
+'************************************************
+
+'Gives the operator the option to view information on screen, to speed up
+'manufacturing process.
+
+NewTitle$	= "MRC Report Information"
+FirstPage$	= "Layer " + str$(ReportLay%) + ":    " + ReportLay$
+SecondPage$	= "Layer " + str$(ReportLay2%) + ":    " + ReportLay2$
+
+OpenForm #1,50,8,NewTitle$, character, okcancel
+AddForm #1, 0, 0, "MRC Agent has completed design analysis.",print
+AddForm #1, 0, 1, "",print
+AddForm #1, 0, 2, "MRC Report Form can be viewed on layers:",print
+AddForm #1, 10, 3, FirstPage$, print
+AddForm #1, 10, 4, SecondPage$, print
+AddForm #1, 0, 5, "", print
+AddForm #1, 0, 6, "I'd like to view the results on screen", check, ViewMRC%
+
+DisplayForm #1
+Canceled% = formcancel(1)
+DeleteForm #1
+return
+
+
+8850
+'************************************************
+'*  MRC REPORT - VIEW ONSCREEN INFO SUBROUTINE  *
+'************************************************
+
+'Displays the information MRC subroutines have gathered from database.
+'	- doesn't display company or customer info, except job and rev info.
+
+NewTitle$	= "MRC Report Information"
+
+'FORM #1 - Operator, Board and Drill Info
+
+OpenForm #1,80,20,NewTitle$, character, okcancel
+AddForm #1, 0, 0, "Operator: " + CamOp$, print
+AddForm #1, 30, 0, "Job #: " + JobNum$, print
+AddForm #1, 60, 0, "Rev: " + JobRev$, print
+AddForm #1, 0, 1, "------------------------------------------------------------------------------------------------------------------------------------------------------", print
+
+AddForm #1, 0, 2, "BOARD INFORMATION  ", print
+AddForm #1, 5, 3, "Dimensions: " + BoardStr$, print
+AddForm #1, 40, 3, "Panel Size: " + PanelStr$, print
+AddForm #1, 5, 4, "Thickness:    " + BoardThk$, print
+AddForm #1, 40, 4, "Core Size:   " + CoreSize$, print
+AddForm #1, 5, 5, "Total # of Electrical Layers: ", print
+AddForm #1, 40, 5, TotLyrs$, print
+AddForm #1, 10, 6, "Internals: ", print
+AddForm #1, 30, 6, IntLyrs$, print
+AddForm #1, 10, 7, "Neg Planes: ", print
+AddForm #1, 30, 7, Neg$, print
+AddForm #1, 40, 7, "Pos Planes: ", print
+AddForm #1, 60, 7, Pos$, print
+AddForm #1, 5, 8, "# of Nets: ", print
+AddForm #1, 30, 8, NumNets$, print
+
+AddForm #1, 0, 9, "------------------------------------------------------------------------------------------------------------------------------------------------------", print
+
+AddForm #1, 0, 10, "DRILL INFORMATION ", print
+AddForm #1, 5, 11, "# of Tools:", print
+AddForm #1, 26, 11, Drills$, print
+
+AddForm #1, 40, 11, "Total # of Hits: ", print
+AddForm #1, 65, 11, TotDrills$, print
+
+AddForm #1, 5, 12, "Smallest Drill Tool: ", print
+AddForm #1, 25, 12, SmDrill$, print
+
+AddForm #1, 40, 12, "Hits Using Smallest:  ", print
+AddForm #1, 65, 12, SmDrillCt$, print
+
+AddForm #1, 5, 13, "Tightest Drill to Trace: ", print
+AddForm #1, 40, 13, Tight$, print
+
+AddForm #1, 5, 14, "Blind/Buried Vias Present: ", print
+AddForm #1, 40, 14, BB$, print
+
+AddForm #1, 5, 15, "# of Drill Files ", print
+AddForm #1, 40, 15, DrlFiles$, print
+
+AddForm #1, 0, 16, "------------------------------------------------------------------------------------------------------------------------------------------------------", print
+AddForm #1, 0, 17, "SMT PAD INFORMATION ", print
+AddForm #1, 5, 18, "# of SMT Pads: ", print
+AddForm #1, 25, 18, "TOP   " + SmtTop$, print
+AddForm #1, 40, 18, "BOTTOM   " + SmtBot$, print
+AddForm #1, 60, 18, "TOTAL   " + SmtTot$, print
+
+AddForm #1, 5, 19, "Smallest Pitch: ", print
+AddForm #1, 25, 19, "TOP " + SmtPchTop$, print
+AddForm #1, 40, 19, "BOTTOM  " + SmtPchBot$, print
+
+DisplayForm #1
+Canceled% = formcancel(1)
+DeleteForm #1
+
+
+'FORM #2 - Min. Spacing and MRC Info
+
+OpenForm #2,100,18,NewTitle$, character, okcancel
+AddForm #2, 0, 0, "Operator: " + CamOp$, print
+AddForm #2, 30, 0, "Job #: " + JobNum$, print
+AddForm #2, 60, 0, "Rev: " + JobRev$, print
+AddForm #2, 0, 1, "--------------------------------------------------------------------------------------------------------------------------------------------------------------------------", print
+
+AddForm #2, 0, 2, "SPACING INFORMATION  ", print
+AddForm #2, 40, 2, "ALL Layers", print
+AddForm #2, 60, 2, "Internals Only", print
+
+AddForm #2, 5, 3, "Smallest Trace:", print
+AddForm #2, 40, 3, SmTrc$, print
+AddForm #2, 60, 3, SmTrcInt$, print
+
+AddForm #2, 5, 4, "Smallest Air Gap:", print
+AddForm #2, 40, 4, SmAir$, print
+AddForm #2, 60, 4, SmAirInt$, print
+
+AddForm #2, 5, 5, "Smallest Annular Ring:", print
+AddForm #2, 40, 5, SmAnn$, print
+AddForm #2, 60, 5, SmAnnInt$, print
+
+AddForm #2, 5, 6, "Smallest Thermal Annular Ring:", print
+AddForm #2, 40, 6, SmThrm$, print
+AddForm #2, 60, 6, SmThrmInt$, print
+
+AddForm #2, 5, 7, "Smallest Pad:", print
+AddForm #2, 40, 7, SmPad$, print
+AddForm #2, 60, 7, SmPadInt$, print
+
+AddForm #2, 0, 8, "--------------------------------------------------------------------------------------------------------------------------------------------------------------------------", print
+
+AddForm #2, 0, 9, "MRC ANALYSIS INFORMATION ", print
+AddForm #2, 40, 9, "# of Errors:", print
+AddForm #2, 85, 9, "# of Errors:", print
+
+AddForm #2, 5, 10, "Acid Trap:", print
+AddForm #2, 40, 10, NumAcidErr$, print
+
+AddForm #2, 5, 11, "Copper Sliver:", print
+AddForm #2, 40, 11, NumCopSlivErr$, print
+
+AddForm #2, 5, 12, "Mask Sliver:", print
+AddForm #2, 40, 12, NumMaskSlivErr$, print
+
+
+AddForm #2, 5, 13, "Solder Bridge:", print
+AddForm #2, 40, 13, TotSoldErr$, print
+
+AddForm #2, 60, 10, "Net Check:", print
+AddForm #2, 85, 10, NumNetChkErr$, print
+
+AddForm #2, 60, 11, "Neg Plane Therm. Check:", print
+AddForm #2, 85, 11, NumNegPlnErr$, print
+
+AddForm #2, 60, 12, "Drill Check:", print
+AddForm #2, 85, 12, NumDrillErr$, print
+
+AddForm #2, 60, 13, "Mill Check:", print
+AddForm #2, 85, 13, NumMillErr$, print
+
+
+AddForm #2, 5, 14, "Starved Thermal:", print
+AddForm #2, 40, 14, NumThermErr$, print
+
+AddForm #2, 5, 15, "Silk to Solder Mask Spacing:", print
+AddForm #2, 40, 15, NumSilk2SoldErr$, print
+
+AddForm #2, 5, 16, "Solder Mask to Trace Spacing:", print
+AddForm #2, 40, 16, NumSold2TraceErr$, print
+
+AddForm #2, 5, 17, "DRC:", print
+AddForm #2, 40, 17, NumDRCErr$, print
+
+
+DisplayForm #2
+Canceled% = formcancel(2)
+DeleteForm #2
+
+'FORM #3 - Misc Info - Copper Area and Gold Tabs
+OpenForm #3,90,10,NewTitle$, character, okcancel
+AddForm #3, 0, 0, "Operator: " + CamOp$, print
+AddForm #3, 30, 0, "Job #: " + JobNum$, print
+AddForm #3, 60, 0, "Rev: " + JobRev$, print
+AddForm #3, 0, 1, "------------------------------------------------------------------------------------------------------------------------------------------------------", print
+
+AddForm #3, 0, 2, "COPPER AREA INFORMATION  ", print
+AddForm #3, 35, 2, "Top", print
+AddForm #3, 60, 2, "Bottom", print
+AddForm #3, 35, 3, TopCop$, print
+AddForm #3, 60, 3, BotCop$, print
+AddForm #3, 5, 4, "Copper Weight:", print
+AddForm #3, 35, 4,  Copper$, print
+
+AddForm #3, 0, 5, "------------------------------------------------------------------------------------------------------------------------------------------------------", print
+
+
+AddForm #3, 0, 6, "GOLD TAB INFORMATION", print
+AddForm #3, 5, 7, "# of Fingers:", print
+AddForm #3, 35, 7, "Top", print
+AddForm #3, 42, 7, GoldTop$, print
+
+AddForm #3, 60, 7, "Bottom", print
+AddForm #3, 69, 7, GoldBot$, print
+
+AddForm #3, 5, 8, "Finger Size:", print
+AddForm #3, 35, 8, "Length", print
+AddForm #3, 42, 8, FingLong$, print
+
+AddForm #3, 60, 8, "Width ", print
+AddForm #3, 69, 8, FingWide$, print
+
+AddForm #3, 5, 9, "Gold Thickness: ", print 
+AddForm #3, 35, 9, GoldThk$, print
+
+DisplayForm #3
+Canceled% = formcancel(3)
+DeleteForm #3
+
+return 
+
+
+9999
+'Last command line - macro !Include returns to calling Execution macro

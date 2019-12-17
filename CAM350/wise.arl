@@ -1,0 +1,44 @@
+NAME GerbTOOL/386
+#
+#  $Workfile:   wise.arl  $
+#  $Revision:   1.1  $
+#   $Modtime:   Jun 05 1998 11:37:06  $
+#      $Date:   Jun 05 1998 11:48:12  $
+#     $Owner:   RN $
+#   $Logfile:   Y:/CAM350/dev/wise.arv  $
+#
+#  Copyright (c) 1998 Advanced CAM Technologies, Inc., all rights reserved.
+#
+
+# ****************************************************
+# This rule file works with GerbTOOL/386 aperture tables.
+HEADER 1
+
+FILE_EXTENSION map
+
+VERSION 1
+IGNORE_CHAR ,
+U_INCH IMPERIAL
+U_MM METRIC
+
+# SHAPE DEF
+S_ROUND		Round
+S_SQUARE	Square
+S_RECTANGLE	Rect
+S_OBLONG	Oblong
+S_OCTAGON	Octagon
+S_THERMAL	Thermal
+S_DONUT		Donut
+S_TARGET	Target
+
+# LINE FORMAT
+FMT_UNIT	%$unit	$skipe
+FMT_SKIP	#	$skipe
+FMT_ROUND	D$dcode	$shape	$xsize	$skipe
+FMT_SQUARE	D$dcode	$shape	$xsize	$skipe
+FMT_RECTANGLE	D$dcode	$shape	$xsize	$ysize	$skipe
+FMT_OBLONG	D$dcode	$shape	$xsize	$ysize	$skipe
+FMT_OCTAGON	D$dcode	$shape	$xsize	$skipe
+FMT_THERMAL	D$dcode	$shape	$od	$id	$skipe
+FMT_DONUT	D$dcode	$shape	$od	$id	$skipe
+FMT_TARGET	D$dcode $shape	$xsize	$skipe

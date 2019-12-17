@@ -1,0 +1,26 @@
+NAME ZUKEN
+#
+#  $Workfile:   zuken.arl  $
+#  $Revision:   1.1  $
+#   $Modtime:   Jun 05 1998 11:37:06  $
+#      $Date:   Jun 05 1998 11:48:12  $
+#     $Owner:   RN $
+#   $Logfile:   Y:/CAM350/dev/zuken.arv  $
+#
+#  Copyright (c) 1998 Advanced CAM Technologies, Inc., all rights reserved.
+#
+
+# ***********************************
+# This rule file works with ZUKEN aperture tables.
+HEADER 31
+
+FILE_EXTENSION rep
+
+# Shape definitions:
+S_ROUND         round
+S_RECTANGLE     oblong
+
+# Line formats:
+FMT_ROUND      $dcode   $xsize	$skip	$shape   $skipe
+FMT_RECTANGLE  $dcode   $xsize	$ysize	$shape   $skipe
+

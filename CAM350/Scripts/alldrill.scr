@@ -1,0 +1,446 @@
+'
+'  $Workfile:   $
+'  $Revision:   $
+'   $Modtime:   $
+'      $Date:   $
+'     $Owner:   $
+'   $Logfile:   $
+'
+'  Copyright (c) 2000 - 2001 Innoveda, Inc., all rights reserved.
+'
+'=================================================================================
+' Allegro Composite Conversion Script
+'
+' Created by:	Laszlo Jakusovszky
+' Date:		06/12/01
+' Revision:	1.0	
+'
+'=================================================================================
+'
+
+'This script converts Allegro drill files to a more readable format.
+
+'Global Variables:
+True%		= 1
+False%		= 0
+High%		= highestlayer!
+
+DrillFile$	= ""	'file to convert
+TempFile$	= ""	'output corrected file
+Table%		= 1	'value for check to create new table (if any tool info exists)
+Import%		= 1	'check to see if new drill file should be imported
+Move%		= 0	'move unplated drills to new layer
+
+ToolTotal%	= 0	'number of drill tools defined in file
+Unit%		= -1	'sets unit to use for creating drill files, based on "header"
+X%		= 0	'counter for arraying drill tools
+OldTable%	= 0	'highest tool table in design
+TableNum%	= 0	'new tool table for drill file
+
+DIM Tools#(1000)	'set array for tracking drill tool values
+DIM ToolsPlate%(1000)	'set array for tacking plated value for tool
+
+
+'******************** Begin Main Program *********************************
+
+
+gosub GETFILE		'gets file to convert from user
+
+Data$ = DrillFile$
+gosub NEWFILE		'create filename for output of modified file
+
+gosub READWRITE		'read in Allegro drill file and export modified version to new file
+
+gosub CHECKTABLE	'check to make sure other drill tables aren't present
+
+if Table% = True% then
+	if HeadError% = False% then
+		gosub TOOLS		'adds Tool Table if "header" is present in file
+	else
+		print "Drill file "+TempFile$+" does not contain tool information. Cannot create tool table!"
+		Table% = False%
+	end if
+end if
+if Import% = True% then gosub IMPORTFILE	'imports new drill file
+if Move% = True% then
+	if HeadError% = False% then
+		gosub MOVEUNPLATE		'move unplated drills to new layer
+	else
+		Move% = False%
+	end if
+end if
+
+gosub GIVEINFO
+
+MACROEND:
+'Ends macro
+print_msg "Macro Exits."
+delay 500
+end
+
+
+'********************* Begin Subroutines *********************************
+
+GETFILE:
+'Retrieves file to convert from user input:
+
+OpenForm #1, 80, 9, "Allegro Drill File Conversion Script", character, okcancel
+AddForm #1, 0, 0, "Copyright (c) 2000, 2001 Innoveda, Inc.", print
+AddForm #1, 0, 1, "This macro will read an Allegro drill file and correct the format to allow import of file.",Print
+AddForm #1, 0, 2, "",print
+AddForm #1, 0, 3, "Please select Drill file to convert:", GETOPENFILENAME, DrillFile$
+AddForm #1, 0, 4, "",print
+AddForm #1, 0, 5, "Create new Tool Table if drill tool information exists in file?",Check, Table%
+AddForm #1, 0, 6, "Import drill file?",Check, Import%
+AddForm #1, 10, 7, "After import: move unplated drills to new layer?",Check, Move%
+
+DisplayForm #1
+Canceled% = formCancel(1)
+DeleteForm #1
+if Canceled% then goto MACROEND
+
+if Import% = False% then Move% = False%
+
+if DrillFile$ = "" then
+	print "Please select a drill file before continuing."
+	
+	goto GETFILE
+end if
+return
+
+
+NEWFILE:
+'Creates new filename for output file
+
+'Determine the area of the filename to parse
+'	- find locations of "." and "\" as delimiters
+
+for Text% = 1 to 20
+	Dash$ = right$(Data$,Text%)
+	Check% = instr(Dash$,"\")	'Get location of the "\" in filename
+	Dot% = instr(Dash$,".")		'Get location of the "." in filename
+	if Check% > 0 then goto 65
+next
+65
+'	Note locations of both characters
+Check% = Check% + 1
+Dot% = Dot% - Check%
+
+'Determine filename info
+File$ = mid$(Dash$,Check%,Dot%)
+FileLength% = len(File$)
+ControlLen% = Filelength% - 1
+TempFile$ = File$ + "_fixed.drl"
+return
+
+
+READWRITE:
+'Opens drill file and corrects formatting. If "header" exists, copies and parses tool information as it occurs.
+
+HeadTest% = False%
+
+print_msg "Converting Drill File."
+
+'Retrieve number of lines in drill file.
+open DrillFile$ for input as #1
+
+do
+	input #1, Test$
+	Counter% = Counter% + 1
+loop until eof(1)
+close #1
+
+open DrillFile$ for input as #1
+open TempFile$ for output as #2
+
+'Input data from drill file
+for Lines% = 1 to Counter%
+
+	line input #1, DrillCheck$
+	Header%	= instr(DrillCheck$, "=")
+	select case DrillCheck$
+
+		case "G90"
+			T = 1			'set first tool number
+			print #2, DrillCheck$
+			print #2, "T01"
+		
+		case "M00"
+			T = T + 1			'set subsequent tool numbers
+			Tool$ = "T0"+str$(T)
+			print #2, Tool$
+
+		case else
+			if Header% > 0 then
+				HeadTest% = True%
+				Data$ = DrillCheck$
+				gosub PARSETOOL
+			end if
+			print #2, DrillCheck$
+	end select
+	Header% = 0
+
+next
+
+close #1
+close #2
+
+If HeadTest% = False% then HeadError% = True%
+
+close_msg
+
+return
+
+
+
+PARSETOOL:
+'Determines the tool information from the "header" of drill file
+
+Test%		= 0
+Count%		= 0
+Check% 		= 0
+Dot% 		= 0
+Plate%		= 0
+SizeNum%	= 0
+PlateNum%	= 0
+Size$		= ""
+Plate$		= ""
+Unit$		= ""
+
+ToolTotal% = ToolTotal% + 1
+X% = X% + 1
+
+'set characters to search for in tool definition
+Char$ = " "	
+
+Dash$ = Data$
+
+do
+	Test% = Test% + 1
+	Test% = instr(Test%,Dash$,Char$)
+	Count% = Count% + 1
+
+	if Count% = 3 then Check% = Test%
+	if Count% = 4 then Dot% = Test%
+	if Count% = 5 then Plate% = Test%
+loop until Count% > 5
+
+'Determine tool size info
+Check% = Check% + 1
+SizeNum% = Dot% - Check%
+Size$ = mid$(Dash$,Check%,SizeNum%)
+
+'Determine Plated substring
+Dot% = Dot% + 1
+PlateNum% = Plate% - Dot%
+Plate$ = mid$(Dash$,Dot%,PlateNum%)
+
+'Determine Unit substring
+Plate% = Plate% + 1
+Unit$ = mid$(Dash$,Plate%)
+
+'set tool size:
+Size# = val(Size$)
+
+'set plating characteristic:
+Plate$ = lcase$(Plate$)
+
+select case Plate$
+	case "plated"
+		PlateSet% = 1
+	case "non_plated"
+		PlateSet% = 0
+	case else
+		Error% = True%
+end select
+
+'set unit value:
+Unit$ = lcase$(Unit$)
+
+select case Unit$
+	case "mils"
+		Unit% = 0
+	case "inches"
+		Unit% = 0
+	case "mms"
+		Unit% = 1
+	case else 
+		Error% = True%
+end select
+
+if Error% = 1 then
+	print "Tool information for Tool # "+str$(X%)+" is incorrect. Please enter value manually in tool table."
+else
+	Tools#(X%) = Size#
+	ToolsPlate%(X%) = PlateSet%
+end if
+return
+
+
+CHECKTABLE:
+'Determines if drill tables exist
+
+for TabTest% = 1 to 10
+	set_nc_table@ TabTest%
+	ToolCheck% = dbq_highestdeftool!
+	if ToolCheck% > 0 then CurrTable% = TabTest%
+	if CurrTable% > OldTable% then OldTable% = CurrTable%
+next
+return
+
+
+TOOLS:
+'Generate a new tool table in application.
+
+Table$ = "Drill Tools"
+TableNum% = OldTable% + 1			'tool table ID
+
+print_msg "Creating new tool table."
+
+'create new table
+nc_add_table@ TableNum%
+nc_set_table_type@ TableNum%,3			'create a drill only table
+nc_set_table_name@ TableNum%,Table$		'set name for table
+set_nc_table@ TableNum%
+
+for Drills% = 1 to X%
+	nc_add_tool@ TableNum%,Drills%					'add tool REF ID #
+	nc_set_tool_id@ TableNum%,Drills%,Drills%			'set tool number
+	nc_set_tool_type@ TableNum%,Drills%,3				'set type (3 = drill only)
+	nc_set_tool_size@ TableNum%,Drills%,Tools#(Drills%)		'set tool size
+	nc_set_tool_plate@ TableNum%,Drills%,ToolsPlate%(Drills%)	'set plated characteristic
+next
+
+close_msg
+return
+
+
+CHECKUNITS:
+'Determines db units, and changes (if different from drill file units)
+
+CurrUnit% = units!
+UnitWarn% = False%
+
+if CurrUnit% <> Unit% then 
+	UnitWarn% = 1
+	delay 1000
+	setunit@ Unit%
+end if
+return
+
+
+IMPORTFILE:
+'Imports fixed drill file.
+
+watch UnPlate%
+watch ToolP$
+watch ToolSet%
+
+DrillLay% 	= High% + 1
+NewName$	= "fixed_plated"
+
+if HeadError% = False% then gosub CHECKUNITS	'determine if db units need to be changed
+
+print_msg "Importing corrected drill file."
+
+nc_import_drill_pl@ DrillLay%,3,TempFile$
+edit_layer@ DrillLay%,-2,-2,-2,-2,NewName$
+
+if HeadError% = False% then gosub SETUNPLATE
+
+close_msg
+
+return
+
+
+SETUNPLATE:
+'Change all drill hits for tools to proper platedness
+break
+
+for Drills% = 1 to X%
+	if ToolsPlate%(Drills%) = False% then
+		ToolP$ = str$(Drills%)
+		ToolSet% = Drills%
+		UnPlate% = ToolsPlate%(Drills%)
+		
+		nc_edit_change_drill_hit@
+		setsnap@ 1
+		seteditcmp@ 0
+		seteditdraw@ 0
+		seteditflash@ 0
+		setbydcode@ ""
+		setbytoolref@ ToolP$
+		setbytabid@ ""
+		edit_selectall2@ 
+		nc_change_drill_hit@ ToolSet%,UnPlate%
+		back@
+		setsnap@ 0
+	end if
+next
+
+layer_alloff@ 0
+view_redraw@
+return
+
+
+MOVEUNPLATE:
+'Moves unplated drills to new layer
+
+view_all@
+view_redraw@
+
+UnplateLay% 	= DrillLay% + 1
+UnplateName$	= "fixed_unplated"
+
+edit_layer@ UnplateLay%,3,3,21,0,UnplateName$
+nc_set_layer_rank@ UnplateLay%,1
+setlayer@ DrillLay%
+
+layer_alloff@ 1
+view_redraw@
+
+nc_assign_tool_table_to_layer@ UnplateLay%,TableNum%
+edit_lmapdefaults@
+
+for Drills% = 1 to X%
+	if ToolsPlate%(Drills%) = False% then
+		ToolP$ = str$(Drills%)
+		
+		edit_move@
+		setsnap@ 1
+		seteditcmp@ 0
+		seteditdraw@ 0
+		seteditflash@ 0
+		setbydcode@ ""
+		setbytoolref@ ToolP$
+		setbytabid@ ""
+		edit_selectall2@ 
+		movetolayer@ UnplateLay%
+		'view_redraw@
+		back@
+		setsnap@ 0
+	end if
+next
+
+layer_alloff@ 0
+view_redraw@
+return
+
+GIVEINFO:
+'Tells user what changes occured:
+
+UnitWarn$ = "WARNING: database units were changed to drill file units."
+TableName$ = "New Drill Table has been created:          "+str$(TableNum%)+". "+Table$
+LayerName$ = "File was imported as layer:                     "+str$(DrillLay%+1)+". "+quote!+NewName$+quote!
+Unplated$ = "Unplated tools were moved to layer:      "+str$(UnplateLay%+1)+". "+quote!+UnplateName$+quote!
+
+OpenForm #1, 80, 7, "Conversion Completed", character, ok
+AddForm #1, 0, 1, "New drill file has been saved as:            "+TempFile$,Print
+if UnitWarn% = True% then AddForm #1, 10, 2, UnitWarn$, print
+if Table% = True% then AddForm #1, 0, 3, TableName$, print
+if Import% = True% then AddForm #1, 0, 4, LayerName$, print
+if Move% = True% then AddForm #1, 0, 5, Unplated$, print
+DisplayForm #1
+Canceled% = formOk(1)
+DeleteForm #1
+return

@@ -1,0 +1,35 @@
+NAME  Allegro_8
+#
+#  $Workfile:   allegro8.arl  $
+#  $Revision:   1.0  $
+#   $Modtime:   June 15 2001 11:37:04  $
+#      $Date:   June 15 2001 11:42:42  $
+#     $Owner:   LJ $
+#   $Logfile:   Y:/CAM350/REL/allegro4.arv  $
+#
+#  Copyright (c) 2001 Innoveda, Inc., all rights reserved.
+#
+
+# ***************************************************************
+# This is the start of an Allegro ARL file that conforms to standards as of Feb 1, 2001.
+
+FILE_EXTENSION txt
+
+VERSION 1
+UNIT MILS
+DELIMITER	G
+
+# Shape definitions:
+S_ROUND        CIRCLE
+S_ROUND        LINE
+S_SQUARE       SQUARE
+S_RECTANGLE    RECTAN
+S_OBLONG       OBLON
+
+# Line formats:
+FMT_SKIPUNTIL +1 WHEEL 1 $skipe
+FMT_ROUND      $shape    $xsize    D$dcode
+FMT_SQUARE     $shape    $xsize    $angle     D$dcode
+FMT_RECTANGLE  $shape    $skip     $xsize    $ysize    $angle     D$dcode
+FMT_OBLONG     $shape    $xsize    $ysize    $angle     D$dcode
+FMT_SKIP	$skip  DW  $skipe

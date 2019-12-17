@@ -1,0 +1,30 @@
+NAME  Mentor_8.2
+#
+#  $Workfile:   mentor82.arl  $
+#  $Revision:   1.1  $
+#   $Modtime:   Jun 05 1998 11:37:06  $
+#      $Date:   Jun 05 1998 11:48:06  $
+#     $Owner:   RN $
+#   $Logfile:   Y:/CAM350/dev/mentor82.arv  $
+#
+#  Copyright (c) 1998 Advanced CAM Technologies, Inc., all rights reserved.
+#
+
+# ***********************************
+# This rule file works with Mentor ver 8.2 aperture tables.
+
+FILE_EXTENSION apt
+
+VERSION 1
+UNIT INCH
+
+# Shape definitions:
+S_ROUND        CIRCLE
+S_RECTANGLE    RECTANGLE
+
+# Line formats:
+FMT_SKIPUNTIL +0 Aperture Position $skipe
+FMT_ROUND      $skip  $dcode  $shape  $skip  $skip   $xsize  $skipe
+FMT_ROUND      $skip  $dcode  $shape  $skip  $skip   $skip   $xsize  $skipe
+FMT_RECTANGLE  $skip  $dcode  $shape  $skip  $xsize  $ysize  $skipe
+FMT_SKIPEOF     Object Painting

@@ -1,0 +1,44 @@
+NAME  Allegro_5
+#
+#  $Workfile:   allegro5.arl  $
+#  $Revision:     $
+#   $Modtime:     $
+#      $Date:     $
+#     $Owner:   MH $
+#   $Logfile:     $
+#
+#  Copyright (c) 1998 Advanced CAM Technologies, Inc., all rights reserved.
+#
+
+#*******************************************
+# This is designed to dcode Allego format aperture tables using Thermal Definitions TODID etc.
+
+
+FILE_EXTENSION txt
+
+VERSION 1
+UNIT MILS
+DELIMITER   X  T
+
+# Shape definitions
+S_ROUND        CIRCLE
+S_ROUND        LINE
+S_RECTANGLE    REC
+S_THERMAL      FLASH
+S_OBLONG       OBLONG
+S_SQUARE       SQUARE
+
+# Line definitions
+FMT_SKIPUNTIL +1 WHEEL $skipe
+FMT_ROUND      $shape    $xsize    D$dcode
+FMT_SKIP       $skip     DIREC  $skipe
+FMT_SKIP       $skip     FULL_CON $skipe
+FMT_RECTANGLE  $shape    $skip  $xsize    $ysize    $skip  D$dcode  $skipe
+FMT_THERMAL    $shape    $od   $id  $skip   $skip  $skip   D$dcode
+FMT_OBLONG     $shape    $xsize    $ysize    $skip     D$dcode
+FMT_SQUARE     $shape    $xsize    $skip     D$dcode
+
+
+
+
+FMT_SKIPEOF    NOTES:    $skipe

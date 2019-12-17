@@ -1,0 +1,35 @@
+NAME  BARCO
+#
+#  $Workfile:   barco.arl  $
+#  $Revision:   1.1  $
+#   $Modtime:   Jun 05 1998 11:37:04  $
+#      $Date:   Jun 05 1998 11:48:00  $
+#     $Owner:   RN $
+#   $Logfile:   Y:/CAM350/dev/barco.arv  $
+#
+#  Copyright (c) 1998 Advanced CAM Technologies, Inc., all rights reserved.
+#
+# ****************************************
+# This rule file works for BARCO aperture lists
+
+FILE_EXTENSION con
+
+VERSION 1
+UNIT MIL
+DELIMITER , ( ) =
+
+# Shape definitions
+S_ROUND         C
+S_SQUARE        S
+S_RECTANGLE     R
+S_OBLONG	BO
+S_DONUT		D
+
+# Line formats:
+FMT_SKIPUNTIL +0 FORMAT $skipe
+FMT_ROUND      	APERTURE  $dcode  $shape  $xsize  $skipe  
+FMT_SQUARE	APERTURE  $dcode  $shape  $xsize  $skipe
+FMT_RECTANGLE  	APERTURE  $dcode  $shape  $xsize  $ysize  $skipe
+FMT_OBLONG	APERTURE  $dcode  $shape  $xsize  $ysize  $skipe
+FMT_DONUT       APERTURE  $dcode  $shape  $od     $id     $skipe
+FMT_SKIP        INCH

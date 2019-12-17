@@ -1,0 +1,20 @@
+NAME  TangoPRO_3
+# ***********************************
+# This rule file works on TangoPRO-PCB format files
+
+FILE_EXTENSION apt
+
+VERSION 1
+DELIMITER	_
+
+# Shape definitions
+S_ROUND        	Ellipse
+S_THERMAL	Thermal
+S_RECTANGLE     Rect
+
+# Line formats:
+FMT_SKIPUNTIL +1 Code Shape $skipe
+FMT_ROUND      D$dcode  $shape  $xsize  $skipe
+FMT_RECTANGLE  D$dcode  $skip   $shape  $xsize  $ysize  $skipe
+FMT_THERMAL    D$dcode  $shape  $skip  $skip  $skip  $skip  $skip  $skip  $od  $skip  $id  $skipe
+FMT_SKIPEOF    Code   Hole Diameter

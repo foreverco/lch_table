@@ -1,0 +1,30 @@
+NAME ORCAD2_2
+#
+#  $Workfile:   orcad2_d.arl  $
+#  $Revision:     $
+#   $Modtime:     $
+#      $Date:     $
+#     $Owner:   MH $
+#   $Logfile:     $
+#
+#  Copyright (c) 1998 Advanced CAM Technologies, Inc., all rights reserved.
+#
+
+# *******************************************
+# This is the start of the ORCAD 2.2 Aperture Rule File.
+
+FILE_EXTENSION apt
+
+VERSION 1
+UNIT INCH
+
+# Shape definitions:
+S_ROUND		Round
+S_RECTANGLE	Rectangle
+
+
+# Line formats:
+FMT_SKIPUNTIL   +1 R90  $skipe
+FMT_ROUND	D$dcode  $shape  $xsize  $skipe
+FMT_RECTANGLE	D$dcode  $shape  $xsize  $ysize  $skipe
+

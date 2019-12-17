@@ -1,0 +1,29 @@
+NAME CADSTAR
+
+#
+#  $Workfile:   cadstar.arl  $
+#  $Revision:   1.1  $
+#   $Modtime:   Jun 05 1998 11:37:04  $
+#      $Date:   Jun 05 1998 11:48:00  $
+#     $Owner:   RN $
+#   $Logfile:   Y:/CAM350/dev/cadstar.arv  $
+#
+#  Copyright (c) 1998 Advanced CAM Technologies, Inc., all rights reserved.
+#
+
+# ***********************************
+# This rule file works with CADSTAR aperture tables.
+HEADER 63
+
+VERSION 1
+
+FILE_EXTENSION usr
+
+# Shape definitions:
+S_ROUND         1
+S_SQUARE        2
+
+# Line formats:
+FMT_ROUND      $dcode   $shape    $skip     $xsize
+FMT_SQUARE     $dcode   $shape    $skip     $xsize
+FMT_SKIPEOF    USER $skipe

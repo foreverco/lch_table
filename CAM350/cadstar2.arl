@@ -1,0 +1,40 @@
+NAME CADSTAR_2
+#
+#  $Workfile:   cadstar2.arl  $
+#  $Revision:   1.1  $
+#   $Modtime:   Jun 05 1998 11:37:04  $
+#      $Date:   Jun 05 1998 11:48:02  $
+#     $Owner:   RN $
+#   $Logfile:   Y:/CAM350/dev/cadstar2.arv  $
+#
+#  Copyright (c) 1998 Advanced CAM Technologies, Inc., all rights reserved.
+#
+# ***********************************
+# This rule file works with CADSTAR 2 aperture tables.
+
+FILE_EXTENSION usr
+
+VERSION 1
+IGNORE_CHAR # ;
+
+# Shape definitions:
+# 7 - Bullet
+# 4 - Diamond
+S_OBLONG        Oblong
+S_ROUND         Circle
+S_SQUARE        Square
+S_DONUT         Donut
+S_OCTAGON       Octagon
+S_RECTANGLE     Rectangle
+
+# Line formats:
+FMT_SKIPUNTIL +0 POSITION SHAPE USAGE $skipe
+FMT_OBLONG     $dcode   $shape   $skip   $ysize   $rot90   $xsize  $skipe
+FMT_ROUND      $dcode   $shape   $skip   $xsize   $skipe
+FMT_SQUARE     $dcode   $shape   $skip   $xsize   $skipe
+FMT_DONUT      $dcode   $shape   $skip   $od      $skipe
+FMT_OCTAGON    $dcode   $shape   $skip   $xsize   $skipe
+FMT_RECTANGLE  $dcode   $shape   $skip   $ysize   $rot90   $xsize  $skipe
+# FMT_CUSTOM     $dcode   4        $skipe
+# FMT_CUSTOM     $dcode   7        $skipe
+FMT_SKIPEOF    THE SYMBOL  $skipe

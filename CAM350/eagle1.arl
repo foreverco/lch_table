@@ -1,0 +1,38 @@
+NAME EAGLE1
+#
+#  $Workfile:   eagle1.arl  $
+#  $Revision:   1.0  $
+#   $Modtime:   July 26 2001 16:25:12  $
+#      $Date:   July 26 2001 16:25:12  $
+#     $Owner:   Mike Harris$
+#   $Logfile:     $
+#
+#  Copyright (c) 2001 Innoveda, Inc., all rights reserved.
+#
+
+# ***********************************
+# This rule file works with EAGLE aperture tables in inch format.
+HEADER 2
+
+FILE_EXTENSION whl
+UNIT INCH
+DELIMITER  i
+
+# Shape definitions:
+S_ROUND         	draw
+S_ROUND         	round
+S_SQUARE       		square
+S_OCTAGON       	octagon
+S_RECTANGLE     	rectangle
+S_DONUT			annulus
+S_THERMAL		thermal
+S_OBLONG		oval
+
+# Line formats:
+FMT_ROUND	D$dcode	$shape	$xsize  nch $skipe
+FMT_SQUARE	D$dcode	$shape	$xsize  nch $skipe
+FMT_OCTAGON	D$dcode	$shape	$xsize  nch $skipe
+FMT_RECTANGLE	D$dcode	$shape	$xsize	nch  $skip  $ysize  nch $skipe
+FMT_DONUT	D$dcode  $shape  $od  $skip  $skip  $id  nch $skipe
+FMT_THERMAL	D$dcode  $shape  $od  $skip  $skip  $id  $skipe
+FMT_OBLONG	D$dcode $shape  $xsize  nch  $skip  $ysize  nch $skipe

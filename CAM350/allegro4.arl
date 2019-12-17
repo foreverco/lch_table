@@ -1,0 +1,36 @@
+NAME  Allegro_4
+#
+#  $Workfile:   allegro4.arl  $
+#  $Revision:   1.1  $
+#   $Modtime:   Jun 05 1998 11:37:04  $
+#      $Date:   Jun 05 1998 11:48:00  $
+#     $Owner:   RN $
+#   $Logfile:   Y:/CAM350/dev/allegro4.arv  $
+#
+#  Copyright (c) 1998 Advanced CAM Technologies, Inc., all rights reserved.
+#
+
+# ***************************************************************
+# This is the start of the Allegro example 4 Aperture Rule File
+
+FILE_EXTENSION txt
+
+VERSION 1
+UNIT MILS
+
+# Shape definitions:
+S_ROUND        CIRCLE
+S_ROUND        LINE
+S_SQUARE       SQUARE
+S_RECTANGLE    RECTANGLE
+S_OBLONG       OBLONG
+S_THERMAL      THERMAL
+
+# Line formats:
+FMT_SKIPUNTIL +1 WHEEL 1 $skipe
+FMT_ROUND      $shape    $xsize    D$dcode
+FMT_SQUARE     $shape    $xsize    $skip     D$dcode
+FMT_RECTANGLE  $shape    $xsize    $ysize    $skip     D$dcode
+FMT_OBLONG     $shape    $xsize    $ysize    $skip     D$dcode
+FMT_THERMAL    D$dcode   $shape    $od       $skip     $id  $skipe
+# FMT_CUSTOM     FLASH     $skip     $skip     D$dcode

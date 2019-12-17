@@ -1,0 +1,30 @@
+NAME  Mentor_7
+#
+#  $Workfile:   mentor7.arl  $
+#  $Revision:   1.1  $
+#   $Modtime:   Jun 05 1998 11:37:06  $
+#      $Date:   Jun 05 1998 11:48:04  $
+#     $Owner:   RN $
+#   $Logfile:   Y:/CAM350/dev/mentor7.arv  $
+#
+#  Copyright (c) 1998 Advanced CAM Technologies, Inc., all rights reserved.
+#
+# ***********************************
+# This rule file works with Mentor ver 7 aperture tables.
+
+FILE_EXTENSION apt
+
+VERSION 1
+UNIT INCH
+IGNORE_CHAR #
+
+# Shape definitions
+S_ROUND        Circle
+S_RECTANGLE    Rectangular
+
+# Line formats:
+FMT_SKIPUNTIL +0 DEFine APerture Position $skipe
+FMT_ROUND      DEFine  APerture  $apid   $shape  $skip  $xsize  $skipe
+FMT_RECTANGLE  DEFine  APerture  $apid   $shape  $skip  $ysize  $xsize  $skipe
+FMT_SKIPEOF    DEFine OBject 
+

@@ -1,0 +1,1094 @@
+               CAM350 Version 7.5 Readme File
+                    May 22, 2002
+
+
+Our ADDRESS and PHONE NUMBERS
+==============================
+DownStream Technologies, LLC
+563 Main Street
+Bolton, Massachusetts 01740
+Phone: (978)779-6712
+Fax:   (978)779-6718
+
+Web Address: www.downstreamtech.com
+Licenses: licenses@downstreamtech.com
+Support: support@downstreamtech.com
+Sales: sales@downstreamtech.com
+
+----------------------------------------------------------
+NOTE: Quote & MRC Agent users, please call your sales rep
+or tech support for a new access code! It is required for
+running the Agents in build 164 and up.
+----------------------------------------------------------   
+
+SPECIFIC ISSUES (latest changes occur at the front of each list)
+================================================================
+
+*** BUILD 194 ***
+
+IMPORT
+------
+Area affected: Import RS274X Gerber with composite layers
+Symptom: When flashes are present on clear (negative) layer,
+in some cases they may be covered by objects on succeeded layers.
+Fixed in build 194.
+
+*** BUILD 193 ***
+
+UTILITIES
+---------
+Area affected: Convert Composite
+Symptom: When converting composites to layers, circular polygon voids
+are appromixated by small segments. To control the polygon void arc 
+approximation, use the parameter in Camnt95.ini:
+
+[Preferences]
+Arc_Deviation=0.0005
+ 
+This system setting controls how arcs in polygons are handled. This 
+essentially tells the system to compare sectorized arc data against a true 
+arc, and place the segments so that none are further away from the true 
+arc than the distance you specify. The smaller the value, the more 
+sectors and the "smoother" the arc. This setting only needs to be 
+modified if you are working with data on a very large or very small scale.
+Increasing the value will help system performance (speed), and decreasing
+ the value will improve accuracy.
+
+
+IMPORT
+------
+Area affected: Import RS274 Gerber
+Symptom: When importing file that contains composites and multiple
+layers have the same name, then multiple changes in layer polarity may 
+cause some polygons may be lost,
+
+*** BUILD 192 ***
+
+UTILITIES
+---------
+Area affected: Netlist Extract
+Symptom: When Layer Sets are defined, multiple identical definitions
+of padstacks may be created. On large designs this may cause the padstack
+table overflow and some pads may be lost.
+
+IMPORT
+------
+Area affected: Import RS274 Gerber
+Symptom: When importing file contains composites, some polygons may be lost,
+especially if they have very small segments.
+Enhancement: to control the polygon smoothing process, a new parameter
+in Camnt95.ini is introduced:
+
+[Photoplotter]
+SmoothCompositePolygons=5
+
+The suggested value is 5, but it may be from 0 to 10.
+
+Area affected: Import RS274 Gerber and more
+Symptom: Some polygons are getting invalid or lost.
+Fixed more cases with multiple polygon self-intersections.
+
+*** BUILD 191 ***
+
+MISCELLANEOUS
+-------------
+Area Affected: Licensing
+Symptom: UNIX license server performance issue.
+
+*** BUILD 190 ***
+
+GENERAL
+-------
+
+The Filmbox is now accessible in the main CAM editor.
+The new menu items added:
+File | Setup | Filmbox
+View | Filmbox
+The filmbox size and alignment settings are the same for
+all editors. The visibility is set individually in each editor.
+
+Some updates announced for Build 189 are actually included in Build 190.
+
+
+*** BUILD 189 ***
+
+GENERAL
+-------
+All functionality of FabFactory is merged into CAM350.
+The FabFactory is no longer distributed.
+See our web site for details at 
+http://www.downstreamtech.com/fabfactory_and_v75.asp
+
+
+SECURITY
+--------
+
+The access codes and license files are updated; those issued for
+prior versions are no longer valid for version 7.5 and up.
+All legal users should receive new licenses. Please refer to our
+contact information in case of any problems.
+
+EDITING
+-------
+Area Affected: Edit | Mirror
+Symptom: If there are any symmetrical custom apertures,
+mirroring the database deletes CAPs that are identical
+to their mirrored images.
+Fixed in build # 189
+
+Area Affected: Edit | Copy
+Symptom: Error messages about invalid polygons.
+This is typically occured if there are polygons with
+self-intersections or containing only 1 or 2 vertices.
+Fixed in build # 189
+
+Area Affected: Edit | Change | Explode All and Edit | Copy
+Symptom: After "Explode All" some pads may remain selected
+(though not highlighted). This prevents them from re-selection.              
+Fixed in build # 189
+
+Area Affected: Edit | Change | Origin | Datum Coordinate
+Symptom: Input of negative coordinates for X or Y may result
+in wrong values.
+Fixed in build # 189
+
+EXPORT
+------
+
+Area Affected: File | Export | ODB++
+Symptom: Wrong aperture definitions when attempting to export
+using metric units.
+Fixed in build # 189
+
+Area Affected: File | Export | Gerber Data (RS274D)
+Symptom: Missing M02 at the end of RS-274D exported files.
+Fixed in build # 189
+
+Area Affected: File | Export | Gerber Data (Fire9xxx)
+Symptom: Some Fire9xxx systems misinterpret polygons with 2 or
+more voids, when only the first void is visible.
+Enhancement: There is a new parameter in camnt95.ini which controls
+the style of output of multiple polygon voids:
+[Photoplotter]
+FireUseAltDcodes=NO
+(or equivalently FireUseAltDcodes=0)
+The default value is YES (or 1), that retains the old behavior.
+This parameter is queried before every Gerber export, so you don't
+need to restart the application.
+Fixed in build # 189
+
+IMPORT
+------
+
+Area Affected: File | Merge
+Symptom: Some apertures may be lost when merging designs
+that have custom apertures with the same names.
+Now the warning is issued. You may ignore this warning if you
+are sure that those apertures are actually the same,
+including the rotation angle, otherwise it's recommended
+to rename them.
+Fixed in build # 189
+
+Area Affected: All import commands
+Symptom: Import may fail on some polygon definitions.
+In particular, this includes polygons with self-intersections,
+with redundant segments, or with non-smooth fragments with very
+small segments.
+Fixed in build # 189
+
+Area Affected: Import of Fire9xxx
+Symptom: Misinterpreted REA statements
+Fixed in build # 189
+
+Area Affected: Import | CAD Data | PADS
+Symptom: Incorrect handling of parts with multiple reference
+designators.
+Fixed in build # 189
+
+Area Affected: Import | CAD Data | PADS
+Symptom: Incorrect orientation reference designators that have
+"Right Reading" attribute.
+Fixed in build # 189
+
+UTILITIES
+---------
+
+Area Affected: Utilities | Draw To Flash
+Symptom: Crash performing Draw To Flash operation.
+Fixed in build # 189
+
+*** BUILD 188 ***
+
+UTILITIES
+---------
+Area Affected: Utilities | Netlist Extract
+Symptom: Crash performing a Netlist Extract.
+Fixed in build # 188
+
+Area Affected: Analysis | DRC
+Symptom: Crash performing a track to track clearance DRC.
+Fixed in build # 188 
+
+Area Affected: Analysis | Acid Traps
+Symptom: Crash performing a Acid Trap DFF analysis check.
+Fixed in build # 188 
+
+*** BUILD 187 ***
+
+UTILITIES
+---------
+Area Affected: Utilities | Netlist Extract
+Symptom: Program error after performing a Netlist Extract.
+Fixed in build # 187
+
+Area Affected: Import | PADS
+Symptom: Importing PADS files from PADS ASCII files
+causes bad pad rotation for pads defined in rotated 
+and mirrored parts.
+Fixed in build # 187 
+
+
+*** BUILD 184 ***
+
+UTILITIES
+---------
+Area Affected: Utilities | Netlist Extract
+Symptom: Program error after performing a Netlist Extract.
+Fixed in build # 184
+
+Area Affected: Utilities | Netlist Extract
+Symptom: Pad stack generation during Netlist Extract 
+incorrectly moves pads by snapping them to the drill
+center. 
+Enhancement: CAMNT95.INI now includes preferences to set the
+snap tolerance for pads and drills, as follows:
+[Preferences]
+   PadToPadTolerance=25400
+   DrillTolerance=25400
+The default value for both settings is 2 mils (25400 db units).
+Fixed in build # 184
+
+Area Affected: Utilities | Data Optimization | Removed Covered Data
+Symptom: The Remove Covered Data function is incorrectly removing 
+data that is not covered.
+Fixed in build # 184
+
+ANALYSIS
+--------
+Area Affected: Analysis | Pin Holes
+Symptom: When Pin Holes check is run on a database 
+with vector polygons, some pin holes are missed.
+Fixed in build # 184
+
+IMPORT
+------
+Area Affected: Import | Gerber
+Symptom: Added new EAGLE1.ARL file for reading aperture table.
+Fixed in build # 184
+
+Area Affected: Import | ODB++
+Symptom: Numeric pins are incorrectly converted to alphanumeric
+pins.
+Fixed in build # 184
+
+EXPORT
+Area Affected: Export | Gerber
+Symptom: When exporting to Fire 9xxx format, Pad rotation is incorrect
+for custom apertures with a defined rotation.
+Fixed in build # 184
+
+Area Affected: Export | ODB++
+Symptom: Exporting ODB++ files from the Panel Editor 
+causes bad pad rotation for pads defined in rotated 
+Symbols.
+Fixed in build # 184
+
+Area Affected: Export | ODB++
+Symptom: Files and directories are sometimes missing on 
+ODB++ export. Valid name checking was added to correct 
+the problem.
+Fixed in build # 184
+
+Area Affected: Export | Gerber
+Symptom: When exporting composite definitions to Gerber, 
+geometries were dropped for certain databases.
+Fixed in build # 184
+
+PANELIZATION
+------------
+Area Affected: Panelization | Venting
+Symptom: Venting is not working properly for certain 
+databases.
+Fixed in build # 184
+
+MISCELLANEOUS
+-------------
+Area Affected: Macro Play
+Symptom: In the CAM350 100 product bundle, the macro command
+"add_gr_poly@" was not working in the CAM Editor.
+Fixed in build # 184
+
+
+*** BUILD 176 ***
+
+IMPORT
+------
+Area Affected: File | Import | Gerber
+Symptom: Polygon voids not merged properly for RS274X files.
+Overlapping voids can cause positive image. Overlapping positive
+polygons can cause failures for polygon voids.
+Fixed in build # 176
+
+NC EDITOR
+---------
+Area Affected: Utilities | Step and Repeat Order
+Symptom: User cannot control the Mill Sort order for image to image
+in the Panel Editor. The Step and Repeat Order command was restored
+from the previous release. Info | Show Mill Machine now shows the step
+and repeat image order.
+Fixed in build # 176
+
+*** BUILD 175 ***
+
+ANALYSIS
+--------
+Area Affected: Analysis | Check Mill
+Symptom: Crash occurred after doing the following: run check,
+hit First on error control panel, select fix, and then use
+Undo command.
+Fixed in build # 175
+
+Area Affected: Analysis | Pin Holes
+Symptom: When function is run with autofix enabled, on a database
+with vector polygons, it took a long time to complete (appeared
+to hang).
+Fixed in build # 175
+
+IMPORT
+------
+Area Affected: Import | DXF
+Symptom: Position of aligned text in DXF file is slightly shifted
+when imported. 
+Fixed in build # 175
+
+Area Affected: Import | DXF
+Symptom: Only monotxt.xhx is in the list box of available fonts.
+Different ACAD fonts in the ACAD font directory could not be
+selected for substitution.
+Fixed in build # 175
+
+Area Affected: Import | DXF
+Symptom: System not recognizing elements with extrusion values of
+-1 in the Z axis, which indicates the element should be mirrored.
+Fixed in build # 175
+
+Area Affected: Import | DXF 
+Symptom: When processing block inserts that contained circles with
+scaling applied to the block, the scaling was not being considered
+when determining if an aperture could be used, nor was it applied
+to the aperture that was created. Also, if there was an import
+offset being applied, it was being applied twice when constructing
+the Grs for a block insert.
+Fixed in build # 175
+
+Area Affected: Import | Gerber
+Symptom: Proper donut descriptions in ARL files were failing.
+Fixed in build # 175
+
+Area Affected: Import | CAD Data (PADS)
+Symptom:  Pads on mirrored parts were wrong.
+Fixed in build # 175
+
+EXPORT
+------
+Area Affected: Export | Gerber (Fire 9XXX)
+Symptom: Export Fire9xxx was putting Step Images in wrong spot.
+Fixed in build # 175
+
+UTILITIES
+---------
+Area Affected: Utilities | Gerber To Mill
+Symptom: When converting sectorized arcs to true arcs in Gerber
+to mill a fixed tolerance of 5 mil is used, which in some cases
+is too large a tolerance, resulting in incorrect arc conversion. 
+Enhancement: A dialog box option and macro command was added to
+force the arc conversion process to use the size of the data to
+compute the tolerance (the same as Edit | Line Change | Segments
+to Arcs).
+Fixed in build # 175
+
+Area Affected: Utilities | Clear Silkscreen
+Symptom: Failing on rotated rectangles.
+Fixed in build # 175
+
+INFO
+----
+Area Affected: Measure | Object To Object
+Symptom: If the relative positions between an arc and another
+object are such that the closest point is at the end point of
+the arc, the measurement point on the arc is the offset end of
+the outline of the arc--without the aperture used to draw the
+arc being considered.
+Fixed in build # 175
+
+*** BUILD 170 ***
+
+ANALYSIS
+--------
+Area Affected: Analysis | DRC
+Symptom: When DRC extracted netlists for analysis purposes, it
+was leaving the temporary net names in the database. 
+Enhancement: when DRC extracts nets a flag is set to indicate
+that the nets are for the DRC run only, if this flag is set then
+in the error report "Unknown" is inserted instead of the
+temporary net name. For macro purposes, added:
+1) drc_NetlistExtract@ to extract nets for DRC, note that this
+command checks for the existence of nets and does NOT extract
+nets if they already exist; and 2) explode_allnets@ to explode
+all nets, this does not do any checking so the macro programmer
+should check for nets BEFORE executing drc_NetlistExtract@ and
+only execute explode_allnets@ if no nets existed before the
+DRC run.
+Fixed in build # 170
+
+Area Affected: Analysis | DRC
+Symptom: The values for the NC Drill and Dcode filters for the
+annular ring checks were swapped.
+Fixed in build # 170
+
+EDIT
+----
+Area Affected: Edit | Copy
+Symptom: Import Gerber created illegal polygons that prevented
+them from being copied.
+Fixed in build # 170
+
+EXPORT
+------
+Area Affected: Export | Gerber, DXF, & Flatten Panel
+		File | Save 6.0 database
+Symptom: Dcodes in Rectangular and oblong pads in rotated Step
+Images and rotated Symbol instances were not being adjusted
+for rotation.
+Fixed in build # 170
+
+Area Affected: Export | Gerber (274X)
+Symptom: Oblong apertures rotated at 90, 180, or 270 were being
+exported as customs.
+Fixed in build # 170
+
+Area Affected: Export | DXF
+Symptom: Rectangular apertures were being incorrectly exported
+as line segments with round end caps, creating an oblong shape
+instead of the rectangular shape.
+Fixed in build # 170
+
+IMPORT
+------
+Area Affected: Import | DXF
+Symptom: In AutoCAD, when polylines change width at segment
+vertices, and the segments are close to being parallel, then
+abrupt transitions are made for the changing width. If the angle
+is larger then the edges are projected until they intersect.
+We were only making the abrupt transition when the segments
+were parallel. At small angles the edges did not intersect,
+resulting in bad polygons.
+Fixed in build # 170
+
+Area Affected: Import | DXF
+Symptom: User scaling of data in AutoCAD caused equal-sized
+round flashes to be imported improperly (some came in as
+unfilled circles).
+Fixed in build # 170
+
+Area Affected: Import | DXF
+Symptom: When design contained two silk layers (one containing
+filled polygons), all the data were being imported onto a single
+layer.
+Fixed in build # 170
+
+Area Affected: Import | DXF
+Symptom: DXF file can't be imported due to use of German characters.
+Fixed in build # 170
+
+Area Affected: Import | DXF
+Symptom: DXF file containing the string "%%USCALE 6:1%%" could
+not be imported.
+Fixed in build # 170
+
+Area Affected: Import | DXF
+Symptom: When verifying the scale value the affects of data
+offset were not being considered.
+Fixed in build # 170
+
+Area Affected: Import | DXF
+Symptom: DXF file cannot be scaled up during import.
+Fixed in build # 170
+
+Area Affected: Import | DXF
+Symptom: Rectangular apertures were being incorrectly exported
+as line segments with round end caps, creating an oblong shape
+instead of the rectangular shape.
+Fixed in build # 170
+
+Area Affected: Import | DXF
+Symptom: When processing donuts with very small inner diameters,
+the inner void was degenerating to nothing. 
+Fixed in build # 170
+
+Area Affected: Import | Aperture Table
+Symptom: File with GAPConv in header instead of GAPFile was
+being rejected.
+Fixed in build # 170
+
+Area Affected: Import | Aperture Table
+Symptom: Aperture mapping not working when D999 is redefined
+many times.
+Fixed in build #170
+
+Area Affected: Import | Gerber (Fire 9XXX)
+Symptom: Aperture table was not able to handle undefined
+apertures when no apertures were defined.
+Fixed in build # 170
+
+Area Affected: Import | Gerber (Barco)
+Symptom: Barco import, if there was a void in a poly in a void
+in a poly, innermost void was missed.
+Fixed in build # 170
+
+Area Affected: Import | Gerber (274X)
+Symptom: single point arc in middle of polygon was interpreted
+as a circle.
+Fixed in build # 170
+
+INFO
+----
+Area Affected: Measure | Object To Object
+Symptom: The line that indicates the measurement goes from line
+center to line center if measuring line to line (the reported
+distance is correct), but goes edge to edge if measuring line
+to flash or flash to flash.
+Fixed in build # 170
+
+UTILITIES
+---------
+Area Affected: Utilities | Composite To Layer
+Symptom: Failed to detect the crossing of a line segment and an
+arc, therefore negative data was not removed from positive data,
+and the composite was incorrectly converted.
+Fixed in build # 170
+
+MISCELLANEOUS
+-------------
+Area Affected: Licensing
+Symptom: When multiple products are in a license.dat file for
+FabFactory, the product names are slightly truncated in the
+opening product selection dialog box. 
+Fixed in build # 170
+
+Area Affected: Macro Play
+Symptom: Convert Composite completion dialog box was not disabled
+during macro play.
+Fixed in build # 170
+
+*** BUILD 168 ***
+
+ANALYSIS
+--------
+Area Affected: Analysis | DRC
+Symptom: After Netlist Extract was performed, Plated Drill to
+Copper was returning false errors for some negative planes.
+Fixed in build # 168
+
+Area Affected: Analysis | DRC
+Symptom: Was finding false Pads w/o Drills and Drills w/o Pads
+errors for thermals.
+Fixed in build # 168
+
+Area Affected: Analysis | DRC
+Symptom: DRC error file path was cropped in display field and
+could not be scrolled.
+Fixed in build # 168
+
+Area Affected: Analysis | DRC
+Symptom: If DRC dialog box was opened and "Delete Old Violations"
+checked, but user hit Cancel, violations were deleted anyway.
+Fixed in build # 168
+
+UTILITIES
+---------
+Area Affected: Utilities | Draw->Flash | Interactive
+Symptom: Could accidentally convert rectangular SMD pads to
+oblongs, if run with 0 tolerance value.
+Fixed in build # 168
+
+MISCELLANEOUS
+-------------
+Area Affected: Info | Report | DRC
+Symptom: Was improperly displaying results for Unplated Drill
+to Copper check.
+Fixed in build # 168
+
+MACROS
+------
+Area Affected: Macro Commands
+Symptom: Utilities | Composite->Layer command was displaying
+interactive dialog boxes during macro play.
+Fixed in build # 168
+
+*** BUILD 167 ***
+
+IMPORT
+------
+Area Affected: Import | Autoimport
+Symptom: Was crashing on aperture tables which did not have all
+the shape parameter values assigned.
+Fixed in build # 166
+
+PANELIZATION
+------------
+Area Affected: Panelization | Create
+Symptom: On Windows 98/ME in FabFactory, was crashing if user
+attempted to Create panel immediately after exiting
+Panelization | Setup.
+Fixed in build # 167
+
+MACROS
+------
+Area Affected: Macro | MRC & Quote Agents
+Symptom: Agents were not running on International versions of
+Windows OS. Traced to macro syntax bug with how report precision
+value was being formatted.
+Fixed in build # 166
+
+*** BUILD 164 ***
+
+IMPORT
+------
+Area Affected: Import | Gerber | Fire9xxx
+Symptom: Wasn't importing some files correctly, due to aperture
+mapping issues between files and subfigures.
+Fixed in build # 164
+
+Area Affected: Import | Autoimport
+Symptom: Import was hanging if user attempted to use a non-product
+generated GAP file (*.gap) to import gerber files.
+Fixed in build # 163
+
+Area Affected: Import | Gerber | 274x
+Symptom: Was crashing when importing composites generated by
+version 7.0.
+Fixed in build # 163
+
+Area Affected: Import | Gerber
+Symptom: If incoming aperture table did not define all parameters,
+other aperture values were not being defaulted, resulting in many
+Undefined apertures.
+Fixed in build # 163
+
+Area Affected: Import | CAD | Accel
+Symptom: Long ref/des names (over 12 characters) were causing
+import to fail.
+Fixed in build # 163
+
+Area Affected: Import | CAD | Accel
+Symptom: Presence of NOCOPPERPOURCONNECTTRUE data structure was
+causing import to fail.
+Fixed in build # 163
+
+Area Affected: Import | ODB++
+Symptom: Certain ODB++ files that were in .tar format only
+(not Zipped) would not import.
+Fixed in build # 163
+
+Area Affected: Import | Gerber | 274x
+Symptom: Certain arcs were being imported with incorrect radius
+values. Arcs had centers defined outside coordinates of the arc.
+Fixed in build # 163
+
+Area Affected: Import | Autoimport
+Symptom: When importing using the Next button, if user selected
+a random text file as an "aperture file" of "Unknown" format,
+import would hang.
+Fixed in build # 163
+
+Area Affected: Import | Autoimport
+Symptom: Aperture mapping was not being done correctly when
+importing gerber files with multiple aperture files. 
+Fixed in build # 163
+
+Area Affected: Import | Gerber | 274x
+Symptom: Certain thermal apertures, defined with AM% commands,
+weren't importing correctly.
+Fixed in build # 163
+
+Area Affected: Import | Gerber | 274x
+Symptom: Import wasn't handling particular polygons 
+(small triangles) correctly, causing a crash. 
+Fixed in build # 163
+
+Area Affected: Import | Gerber
+Symptom: When importing gerber data onto an exisiting layer,
+the Empty option to clear existing data was not working.
+Fixed in build # 163
+
+EXPORT
+------
+Area Affected: Export | ODB++
+Symptom: Was exporting panel data from CAM Editor: now exports
+only one-up from CAM Editor and panel data from Panel Editor.
+Fixed in build # 163
+
+Area Affected: Export | Mill
+Symptom: Export was changed to output compensation index in
+the correct format.
+Fixed in build # 163
+
+Area Affected: Export | Drill
+Symptom: Would not export drill data when only canned drill
+routines (circles, etc). were present on an NC layer.
+Fixed in build # 163
+
+Area Affected: Export | ODB++
+Symptom: Venting was being exported incorrectly on some designs,
+resulting in dot patterns that flooded over circuit data.
+Fixed in build # 163
+
+Area Affected: Export | v6.0 Database
+Symptom: If design was rotated prior to export, drawn data was
+exported correctly, but flashes were left unrotated.
+Fixed in build # 163
+
+Area Affected: Export | Gerber | 274X
+Symptom: Rotated custom apertures in the design were being rotated
+incorrectly on export.
+Fixed in build # 163
+
+Area Affected: Export | Netlist | IPC-D-356A
+Symptom: Adjacency calculation was slowing export excessively.
+INI switch was created to disable check. Add following lines
+to .ini file:
+
+[Interfaces]
+IPC356AdjacencyExported=No
+
+"=Yes" will re-enable checking.
+Fixed in build # 163
+
+Area Affected: Export | Aperture Table
+Symptom: GAP format was not saving all graphical information
+in certain custom apertures.
+Fixed in build # 163
+
+PANELIZATION
+------------
+Area Affected: Panelization | Create
+Symptom: In the auto calculate mode, data was being panelized
+using the extents of the data, not the one up border defined
+in the CAM Editor.
+Fixed in build # 163
+
+Area Affected: Panelization | Setup & Create
+Symptom: If a panel had been previously created with no border
+spacing and user changed size of panel in Setup (adding border
+spacing), Create would hang if run using new panel size.
+Fixed in build # 163
+
+ANALYSIS
+--------
+Area Affected: Analysis | DRC
+Symptom: Track to Track test was running slower than in
+version 6.0.
+Fixed in build # 163
+
+Area Affected: Analysis | Find Starved Thermals
+Symptom: Certain starved thermals were being transformed into
+pads, when user Fixed them interactively (using Error Control
+Panel) and then clicked "Delete Fix".
+Fixed in build # 163
+
+Area Affected: Analysis | DRC Histogram
+Symptom: Number of errors reported was incorrect for the ranges
+run in the test (i.e. 0-5, 5-15).
+Fixed in build # 163
+
+Area Affected: Analysis | Net Check
+Symptom: When arcs or circles were present, as part of a polygon,
+they could cause false opens to appear in net check.
+Fixed in build # 163
+
+Area Affected: Analysis | Copper Area
+Symptom: Command was failing when run on composites, causing
+a crash.
+Fixed in build # 163
+
+Area Affected: Analysis | Copper Area
+Symptom: Was crashing if user inadvertently entered 0 in the
+Resolution field.
+Fixed in build # 163
+
+Area Affected: Analysis | Acid Traps
+Symptom: When run using auto fix mode, resulting fixes were
+creating shorts on certain databases.
+Fixed in build # 163
+
+Area Affected: Analysis | DRC
+Symptom: On pre-7.0 databases which contained DRC information,
+DRC was incorrectly assigning the old special check layers,
+resulting in an error message each time the DRC command was run.
+Fixed in build # 163
+
+MISCELLANEOUS
+-------------
+Area Affected: Tables | Apertures
+Symptom: Some unused apertures which would still appear if table
+was sorted by "Used Only" status.
+Fixed in build # 164
+
+Area Affected: Licensing
+Symptom: Floating license users were given incorrect product
+versions to check out.
+Fixed in build # 163
+
+Area Affected: Universal Aperture Converter
+Symptom: CONCAT keyword was not functioning in conjunction with
+format specifier $shape.
+Fixed in build # 163
+
+Area Affected: View | All
+Symptom: Wasn't displaying all pads properly at maximum zoom level.
+Fixed in build # 163
+
+Area Affected: Info | Report | DRC
+Symptom: If DRC errors were found on both top & bottom
+soldermasks, report was only showing errors for top.
+Fixed in build # 163
+
+Area Affected: NC Editor Licensing
+Symptom: Utilities | Sort Drill was unavailable to users who
+only had the "Basic" NC Editor functions (occurred in
+FabFactory-125). 
+Fixed in build # 163
+
+MACROS
+------
+Area Affected: Macro | MRC & Quote Agents
+Symptom: Now correctly displays the number of SMD pads in a
+database, as well as correct SMD pitch. 
+Fixed in build # 163
+
+Area Affected: Macro | MRC & Quote Agents
+Symptom: No longer creating multiple, empty layers if design
+has a break in layer sequence (design has layers 1-8 & 30).
+Fixed in build # 163
+
+Area Affected: Macro Commands
+Symptom: flyprobe_setdefadj@ command can now be used  to set
+adjacency distance of IPC-D-356A export, regardless of whether
+user has Flying Probe Editor option.
+Fixed in build # 163
+
+Area Affected: Macro Commands
+Symptom: NEW MACRO - alldrill.scr Enables users to import
+incorrect format drill files output by Allegro.
+Fixed in build # 163
+
+Area Affected: Macro Commands
+Symptom: setnewfile@ command, if run in Panel Editor, caused a
+crash. Command now checks which editor it's being run in and
+acts appropriately.
+Fixed in build # 163
+
+Area Affected: Macro | Database Queries
+Symptom: SMD Pitch query (min_smt_pitch_size!) now finds correct
+pitch value for SMD pads.
+Fixed in build # 163
+
+Area Affected: Macro | Database Queries
+Symptom: SMD count query (num_pads_smt!) now returns a more
+accurate count of SMDs in design.
+Fixed in build # 163
+
+
+*** BUILD 158 ***
+
+IMPORT
+------
+Area Affected: Import | Autoimport
+Symptom: Was crashing when it encountered a .PDF file in the
+same directory as gerber files (Win 95/98/ME issue only).
+Fixed in build # 158
+
+Area Affected: Import | Gerber | 274X
+Symptom: When importing a 274X file into an existing .CAM
+database (which contained NC tools), "Undefined" apertures
+would result.
+Fixed in build # 158
+
+Area Affected: Import | Autoimport & 
+			Import | HPGL2
+Symptom: HPGL2 files containing data over a certain x,y size
+were failing to import properly, causing a crash.
+Fixed in build # 158
+
+Area Affected: Import | Autoimport
+Symptom: Gerber data containing complex custom apertures was
+causing Autoimport to crash.
+Fixed in build # 158
+
+Area Affected: Import | Gerber | 274D & 274X
+Symptom: Gerber files with no aperture information were being
+imported without a warning message.
+Fixed in build # 158
+
+Area Affected: Import | Autoimport
+Symptom: Gerber data using G54Dxx commands was drawn
+incorrectly: aperture was changed, but no data was drawn after
+command was issued. 
+Fixed in build # 158
+
+Area Affected: Import | Autoimport
+Symptom: Rounded Rectangles with no given corner radius were
+being imported with a zero radius. Now assigns radius based on
+given x,y sizes. 
+Fixed in build # 158
+
+Area Affected: Import | Autoimport
+Symptom: If incoming Diamond shape apertures had no given y-size,
+default of 0 was being used. Now defaults to x-size. 
+Fixed in build # 158
+
+EXPORT
+------
+Area Affected: Export | v6.0 Database
+Symptom: Was not handling rotated apertures Correctly. If
+rotated prior to export, when opened in 6.0 showed original
+orientations.
+Fixed in build # 158
+
+Area Affected: Export | Netlist | IPC-D-356A
+Symptom: "-" and "+" signs were being included in pad size data,
+which is not correct.
+Fixed in build # 158
+
+Area Affected: Export | ODB++
+Symptom: Imported PADS ascii files, containing parts without
+pins, were causing ODB++ Export to crash.
+Fixed in build # 158
+
+Area Affected: Export | ODB++
+Symptom: Presence of padstacks, without accompanying drills,
+was causing ODB++ Export to crash.
+Fixed in build # 158
+
+Area Affected: Export | ODB++
+Symptom: Compressed ODB++ format (.tgz) was being output
+incorrectly, making it unviewable on re-import, or in other
+external applications.
+Fixed in build # 158
+
+Area Affected: Export | ODB++
+Symptom: Using an imported PADS ascii file, ODB++ Export was
+changing the angle of custom apertures on export.
+Fixed in build # 158
+
+Area Affected: Export | Gerber | Barco
+Symptom: Composite layers exported in Barco format were unreadable.
+Fixed in build # 158
+
+ANALYSIS
+--------
+Area Affected: Analysis | DRC
+Symptom: Plated Drill to Copper was reporting many duplicate errors
+for the same drill, if the drill was in a stroke-filled polygon.
+Fixed in build # 158
+
+UTILITIES
+---------
+Area Affected: Utilities | Netlist Extract
+Symptom: Crashed if run on a design with a blank electrical layer.
+Fixed in build # 158
+
+Area Affected: Utilities | Composite to Layer
+Symptom: Was causing a crash when run on Allegro-output 274X
+composites.
+Fixed in build # 158
+
+Area Affected: Utilities | Netlist Extract
+Symptom: Command was failing if database was over a certain
+x,y size.
+Fixed in build # 158
+
+Area Affected: Utilities | Data Optimization |
+			Remove Covered Data
+Symptom: Rectangle shape apertures were being missed by the command.
+Fixed in build # 158
+
+MISCELLANEOUS
+-------------
+Area Affected: View | Backside
+Symptom: Certain custom apertures weren't mirroring correctly.
+Fixed in build # 158
+
+Area Affected: File | Setup | Access Code
+Symptom: FabFactory-125 & 250 with DFF/DFM option didn't allow
+users to access those Analysis commands. 
+Fixed in build # 158
+
+Area Affected: Edit | Rotate
+Symptom: Thermals drawn as custom apertures were being rotated
+incorrectly.
+Fixed in build # 158
+
+Area Affected: Tables | Apertures
+Symptom: Disabled right-click functionality for this table
+(not applicable to table dialogs).
+Fixed in build # 158
+
+Area Affected: Tables | Apertures
+Symptom: ESC key did not close the table, as in all other
+table dialogs.
+Fixed in build # 158
+
+Area Affected: Tables | Apertures
+Symptom: Rounded Rectangle corner size wasn't scaling with x,y
+size automatically.
+Fixed in build # 158
+
+Area Affected: Tables | Apertures
+Symptom: Rounded & Chamfered Rectangle shapes were losing entered
+corner size when table was closed.
+Fixed in build # 158
+
+MACROS
+------
+Area Affected: Macro | MRC & Quote Agents
+Symptom: Agents are now finding the correct board extents for
+designs with a border layer (or using only electrical layers
+for other designs).
+Fixed in build # 158
+
+Area Affected: Product Macros
+Symptom: autodim.scr wasn't functioning correctly, due to problem
+with mouse coordinate database queries.
+Fixed in build # 158
+
+Area Affected: Macro | MRC & Quote Agents
+Symptom: Agents weren't handling MM units properly when run,
+symptoms include report form being drawn incorrectly.
+Fixed in build # 158
+
+Area Affected: Macro | Play
+Symptom: analyze_data@ macro commands weren't exiting if cancelled
+during Macro Play (using "Cancel" button on Status Bar, or ESC key).
+Fixed in build # 158
+
+Area Affected: Macro | MRC Agent
+Symptom: MRC Agent was running very slowly on most databases.
+Fixed in build # 158
+
+Area Affected: Macro | Debug
+Symptom: Debugger was looping if !INCLUDE statement with an
+invalid file path was encountered.
+Fixed in build # 158
+

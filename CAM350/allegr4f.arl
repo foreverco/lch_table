@@ -1,0 +1,26 @@
+NAME  Allego_4f
+# ***************************************************************
+# This is the start of the Allegro example 4 Aperture Rule File
+
+FILE_EXTENSION txt
+
+VERSION 1
+UNIT MILS
+
+# Shape definitions:
+S_ROUND        CIRCLE
+S_ROUND        LINE
+S_ROUND        FLASH
+S_SQUARE       SQUARE
+S_RECTANGLE    RECTANGLE
+
+
+# Line formats:
+FMT_SKIPUNTIL +1 WHEEL     1 $skipe
+FMT_ROUND      $shape    $xsize    D$dcode
+FMT_SQUARE     $shape    $xsize    D$dcode
+FMT_RECTANGLE  $shape    $xsize    $ysize    D$dcode
+FMT_SKIP       $skip  $skip  $skip  45.000  $skipe
+FMT_SKIP	FLASH  $skipe   
+
+

@@ -1,0 +1,36 @@
+NAME  Allegro_1
+#
+#  $Workfile:   allegro1.arl  $
+#  $Revision:   1.1  $
+#   $Modtime:   Jun 05 1998 11:37:04  $
+#      $Date:   Jun 05 1998 11:47:58  $
+#     $Owner:   RN $
+#   $Logfile:   Y:/CAM350/dev/allegro1.arv  $
+#
+#  Copyright (c) 1998 Advanced CAM Technologies, Inc., all rights reserved.
+#
+
+# ***********************************
+# This is the start of the Allegro Example #1 Aperture Rule File
+
+FILE_EXTENSION apt
+
+VERSION 1
+U_MIL ENGLISH
+U_MM   METRIC
+DELIMITER /
+
+# Shape definitions
+S_ROUND        LINE
+S_ROUND        CIRCLE
+S_SQUARE       SQUARE
+S_RECTANGLE    RECTANGLE
+S_THERMAL      TH
+
+# Line formats:
+FMT_SKIPUNTIL +1 WHEEL 1 $skipe
+FMT_UNIT       INPUT-UNITS $unit
+FMT_ROUND      $shape  $xsize  D$dcode  $skipe
+FMT_SQUARE     $shape  $xsize  $skip    D$dcode   $skipe
+FMT_RECTANGLE  $shape  $xsize  $ysize   $skip     D$dcode  $skipe
+FMT_THERMAL    $skip   $od     $id      ??$shape  $skip    D$dcode  $skipe

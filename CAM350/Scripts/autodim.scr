@@ -1,0 +1,608 @@
+'
+'  $Workfile:   autodim.scr  $
+'  $Revision:   1.2  $
+'   $Modtime:   Jun 28 1999 16:00:10  $
+'      $Date:   Jun 28 1999 16:01:46  $
+'     $Owner:   RN $
+'   $Logfile:   Y:\CAM350\dev\autodim.scv  $
+'
+'  Copyright (c) 1998 - 2001 Innoveda, Inc., all rights reserved.
+'
+
+'Modified 3/6/01:
+' 1. Replaced usage of coordx! & coordy! queries with mouseposx! & mouseposy! as former queries
+'	are returning incorrect mouse coordinates.
+
+'Modified 6/9/99:
+' 1. Added two 6.0 Forms to replace ok_cancels, etc. for Dimensioning and Font/Line Width info
+' 2. Added option to have macro create new graphic layer to do dimensioning on, or allow user
+'	to specify another layer to use
+
+' 1. Rewrote a few areas of dimension-finding code (eliminated a few gotos)
+' 2. Added a line to allow correct processing of inch dimensions with no decimal
+'    places (these had previously always shown the total distance as 0)
+' 3. Added query to ask customer if he wishes to repeat horizontal/vertical 
+'	dimensioning
+' 4. Added code to check if layer being using to draw dimensions is graphic;
+'	prompts user to change if it isn't
+
+
+50
+'Set Form Variables:
+Height% = 11
+CurFont% = 1
+
+'Check to see that current layer is a graphic or not
+gosub 900
+if LayerG% = 0 then Height% = 15
+
+100
+'Use Form to gather all the necessary information to create Star Vented Panel
+OpenForm #1,90,Height,"AUTOMATIC DIMENSIONING MACRO by Innoveda Inc.", character, okcancel
+AddForm #1, 0, 0, "This macro will allow you to place dimensioning information on a graphic layer. Current active layer will be used, if possible.",Print
+AddForm #1, 0, 1, "",Print
+AddForm #1, 0, 2, "-->NOTE: script will create new apertures starting at dcode 999",Print
+AddForm #1, 22, 3, "PLEASE GIVE DIMENSIONING INFORMATION:",Print
+AddForm #1, 0, 4, "Select Dimensioning Type:",Choice, Dimtype, "Horizontal point to point","Vertical point to point","Datum"
+AddForm #1, 51, 4, "Select Units:",Choice, Units, "Inch","Mils"
+AddForm #1, 65, 4, "Select Decimal Places:",Choice, Decimals, "0","1","2","3","4"
+AddForm #1, 75, 5, "(Maximum of 2 decimal places for mils!)", Print
+AddForm #1, 10, 7, "If Datum, select:",Choice, Datumdir, "Horizontal","Vertical"
+AddForm #1, 0, 10, "Use Current Font and Snap Settings?", Check, Font
+
+if LayerG% = 0 then AddForm #1, 0, 12, "The current layer is not a graphic layer:",Choice, NewLay%, "Create New Graphic Layer?", "Use Another Existing Layer #?"
+if LayerG% = 0 then AddForm #1, 25, 14, "If Existing Layer, enter layer #:",Input, LayerNum%
+DisplayForm #1
+Canceled% = formCancel(1)
+DeleteForm #1
+
+if Canceled% then goto 820
+
+'Check layer to see if it's graphic
+if NewLay% = 1 then
+	LayerNum% = highestlayer! + 1
+	edit_layer@ LayerNum%,12,12,4,0,""
+	setlayer@ LayerNum%
+end if
+if NewLay% = 2 then setlayer@ LayerNum% - 1
+gosub 900
+if LayerG% = 0 then print "This layer is not a graphic layer. Please enter new layer."
+if LayerG% = 0 then goto 100
+
+'Set units at proper size
+'	Inch
+If Units = 1 then Conv = 1000
+
+'	Mils
+If Units = 2 then Conv = 1
+
+
+'Check Decimals for Mils
+If Units = 2 then
+	if Decimals > 3 then
+		print "Too many decimal places for MILS. Please re-select."
+		goto 100
+	end if
+end if
+Decimals = Decimals - 1
+
+105
+'Initialize Variables:
+Firstime = 1
+setsnapdist@ 6
+Markersize = 100
+Textheight = 100
+Linewidth = 10
+
+140
+'Use Datum type dimensioning if requested by user
+If Dimtype = 3 then goto 400
+
+' Horizontal & Vertical Dimensioning
+150
+If Font = 0 then gosub 810
+If Font = 1 then
+	Gridsnap = 0
+	Objectsnap = 1
+	Stepoff = 100
+	AW = 100
+	Ap = 999
+	setdcode@ Ap
+	Currentap = Ap
+	edit_aperture@ Currentap,1,Linewidth,Linewidth,Currentap,""
+end if
+
+151
+If Firstime = 1 then Print "Follow the prompts on the status line below"+CR!+CR!+"(Snap box-cursor will not show)"
+Firstime = 0
+Error1 = 0
+clearmarkers@
+setgridsnap@ Gridsnap
+setsnap@ Objectsnap
+edit_aperture@ Currentap,1,Linewidth,Linewidth,Currentap,""
+
+153
+Getmousepos@ "Select FIRST Point (Right Button Exits)"
+If Button! = 1 then goto 154
+If Button! = 2 then goto 820
+Goto 153
+
+154
+Marker = 1
+Gosub 840
+mx1# = coordx#
+my1# = coordy#
+
+156
+Getmousepos@ "Select SECOND Point (Right Button Exits)"
+If Button! = 1 then goto 157
+If Button! = 2 then goto 820
+Goto 156
+
+157
+Marker = 2
+Gosub 840
+mx2# = coordx#
+my2# = coordy#
+setgridsnap@ Gridsnap
+setsnap@ 0
+
+162
+Getmousepos@ "Enter location for dimension TEXT"
+If Button! = 1 then goto 163
+If Button! = 2 then goto 820
+Goto 162
+
+163
+locX# = mouseposx!
+locY# = mouseposy!
+
+' Compute the distance
+If Dimtype = 2 then
+	dist# = (MY2# - MY1#) / Conv
+Else
+	dist# = (MX2# - MX1#) / Conv
+end if
+dist# = ABS (dist#)
+If Decimals = 0 then dist = dist#
+Dim$ = dist
+If Decimals = 1 then gosub 760
+If Decimals = 2 then gosub 765
+If Decimals = 3 then gosub 770
+If Decimals = 4 then gosub 775
+
+textcapheight@ Textheight
+textjust@ 4
+textfitting@ 0
+textangle@ 0
+textmirror@ 0
+textvertical@ 0
+If Dimtype = 1 then textangle@ 0
+If Dimtype = 2 then textangle@ 9000
+addtext@ LocX#,LocY#,0,0,dim$
+
+' Horizontal and Vertical Modes
+' Turn off all snaps.
+setgridsnap@ 0
+setsnap@ 0
+If Dimtype = 2 then goto 200
+
+' Horizontal Only
+' Draw Extension line 1
+DLY# = LocY# - Textheight/2 - Linewidth*2
+Offset = Stepoff
+If LocY# < MY1# then Offset = -Offset
+EL1AX# = MX1#
+EL1AY# = MY1# + Offset
+EL1BX# = MX1#
+EL1BY# = DLY# + Offset
+Add_Line@
+axy@ EL1AX#,EL1AY#
+axy@ EL1BX#,EL1BY#
+Back@
+' Draw Extension line 2
+EL2AX# = MX2#
+EL2AY# = MY2# + Offset
+EL2BX# = MX2#
+EL2BY# = EL1BY#
+Add_Line@
+axy@ EL2AX#,EL2AY#
+axy@ EL2BX#,EL2BY#
+back@
+' Draw dimension line
+AD = AW
+If MX2# < MX1# then AD = -AW
+Add_Line@
+axy@ MX1#,DLY#
+axy@ MX1# + AD,DLY# + AD
+axy@ MX1#,DLY#
+axy@ MX1# + AD,DLY# - AD
+axy@ MX1#,DLY#
+axy@ MX2#,DLY#
+axy@ MX2# - AD,DLY# + AD
+axy@ MX2#,DLY#
+axy@ MX2# - AD,DLY# - AD
+axy@ MX2#,DLY#
+Back@
+goto 860
+
+' Vertical Mode
+200
+' Draw Extension line 1
+DLX# = LocX# + Textheight/2 + Linewidth*2
+Offset = Stepoff
+If LocX# < MX1# then Offset = -Offset
+EL1AX# = MX1# + Offset
+EL1AY# = MY1# 
+EL1BX# = DLX# + Offset
+EL1BY# = MY1# 
+Add_Line@
+axy@ EL1AX#,EL1AY#
+axy@ EL1BX#,EL1BY#
+Back@
+' Draw Extension line 2
+EL2AX# = MX2# + Offset
+EL2AY# = MY2# 
+EL2BX# = EL1BX#
+EL2BY# = MY2#
+Add_Line@
+axy@ EL2AX#,EL2AY#
+axy@ EL2BX#,EL2BY#
+back@
+' Draw dimension line
+AD = AW
+If MY2# < MY1# then AD = -AW
+Add_Line@
+axy@ DLX#,MY1#
+axy@ DLX# - AD,MY1# + AD
+axy@ DLX#,MY1#
+axy@ DLX# + AD,MY1# + AD
+axy@ DLX#,MY1#
+axy@ DLX#,MY2#
+axy@ DLX# - AD,MY2# - AD
+axy@ DLX#,MY2#
+axy@ DLX# + AD,MY2# - AD
+axy@ DLX#,MY2#
+Back@
+goto 860
+
+' Datum Dimensioning
+400
+If Font = 0 then Gosub 810
+If Firstime = 1 then Print "Follow the prompts on the status line below"+CR!+CR!+"(Snap box-cursor will not show)"
+Firstime = 0
+Error1 = 0
+Ap = 999
+setdcode@ Ap
+Currentap = Ap
+setgridsnap@ Gridsnap
+setsnap@ Objectsnap
+edit_aperture@ Currentap,1,Linewidth,Linewidth,Currentap,""
+
+475
+Getmousepos@ "Select Datum BASE Point (Right Button Exits)"
+If Button! = 1 then goto 465
+If Button! = 2 then goto 820
+Goto 475
+
+465
+Marker = 1
+Gosub 840
+mx1# = coordx#
+my1# = coordy#
+setgridsnap@ Gridsnap
+setsnap@ 0
+
+476
+If Datumdir = 2 then Getmousepos@ "Enter the X location for all TEXT"
+If Datumdir = 1 then Getmousepos@ "Enter the Y location for all TEXT"
+If Button! = 1 then goto 477
+If Button! = 2 then goto 820
+Goto 476
+
+477
+locX# = mouseposx!
+locY# = mouseposy!
+
+' Display the 0.0 point
+Dim$ = "0.0"
+setgridsnap@ 0
+setsnap@ 0
+If Datumdir = 2 then goto 500
+' Horizontal Only
+' Draw BASE Extension line
+Offset = Stepoff
+If LocY# < MY1# then Offset = -Offset
+EL1AX# = MX1#
+EL1AY# = MY1# + Offset
+EL1BX# = MX1#
+EL1BY# = LocY# - Offset
+LocX# = MX1#
+Add_Line@
+axy@ EL1AX#,EL1AY#
+axy@ EL1BX#,EL1BY#
+Back@
+If LocY# < MY1# then Justification = 6
+If LocY# > MY1# then Justification = 5
+Gosub 830
+
+' Get each point and draw each dimension as each point is entered
+455
+setgridsnap@ Gridsnap
+setsnap@ Objectsnap
+Delmarker@ 2
+
+456
+Getmousepos@ "Select NEXT Point to dimension (Right Button to End)"
+If Button! = 1 then goto 457
+If Button! = 2 then goto 820
+goto 456
+
+457
+Marker = 2
+Gosub 840
+mx2# = coordx#
+my2# = coordy#
+' Compute the distance
+dist# = (MX2# - MX1#) / Conv
+If Decimals = 0 then dist = dist#
+Dim$ = dist
+If Decimals = 1 then gosub 760
+If Decimals = 2 then gosub 765
+If Decimals = 3 then gosub 770
+If Decimals = 4 then gosub 775
+LocX# = MX2#
+' Justification = 6
+Gosub 830
+
+' Turn off all snaps.
+setgridsnap@ 0
+setsnap@ 0
+' Draw Extension line
+Offset = Stepoff
+If LocY# < MY2# then Offset = -Offset
+EL2AX# = MX2#
+EL2AY# = MY2# + Offset
+EL2BX# = MX2#
+EL2BY# = EL1BY#
+Add_Line@
+axy@ EL2AX#,EL2AY#
+axy@ EL2BX#,EL2BY#
+back@
+goto 455
+
+' DATUM VERTICAL DIMENSIONING
+500
+' VERTICAL Only
+' Draw BASE Extension line
+Offset = Stepoff
+If LocX# < MX1# then Offset = -Offset
+EL1AX# = MX1# + Offset
+EL1AY# = MY1#
+EL1BX# = LocX# - Offset
+EL1BY# = MY1#
+LocY# = MY1#
+Add_Line@
+axy@ EL1AX#,EL1AY#
+axy@ EL1BX#,EL1BY#
+Back@
+If LocX# > MX1# then Justification = 5
+If LocX# < MX1# then Justification = 6
+Gosub 830
+
+' Get each point and draw each dimension as each point is entered
+555
+setgridsnap@ Gridsnap
+setsnap@ Objectsnap
+Delmarker@ 2
+556
+Getmousepos@ "Select NEXT Point to dimension (Right Button to End)"
+If Button! = 1 then goto 557
+If Button! = 2 then goto 820
+goto 556
+557
+Marker = 2
+Gosub 840
+mx2# = coordx#
+my2# = coordy#
+' Compute the distance
+dist# = (MY2# - MY1#) / Conv
+If Decimals = 0 then dist = dist#
+Dim$ = dist
+If Decimals = 1 then gosub 760
+If Decimals = 2 then gosub 765
+If Decimals = 3 then gosub 770
+If Decimals = 4 then gosub 775
+LocY# = MY2#
+' Justification = 5
+Gosub 830
+
+' Turn off all snaps.
+setgridsnap@ 0
+setsnap@ 0
+' Draw Extension line
+Offset = Stepoff
+If LocX# < MX2# then Offset = -Offset
+EL2AX# = MX2# + Offset
+EL2AY# = MY2#
+EL2BX# = EL1BX#
+EL2BY# = MY2#
+Add_Line@
+axy@ EL2AX#,EL2AY#
+axy@ EL2BX#,EL2BY#
+back@
+goto 555
+
+760
+dim$ = FMTUSING$("####.#", dist#)
+Return
+
+765
+dim$ = FMTUSING$("####.##", dist#)
+Return
+
+770
+dim$ = FMTUSING$("####.###", dist#)
+Return
+
+775
+dim$ = FMTUSING$("####.####", dist#)
+Return
+
+' SUBROUTINES
+800
+error1=1
+Print "Invalid Value"
+Return
+
+810
+'Set User Specified Font size and dimensioning line
+TextHeight$ = str$(Textheight)
+FontHeight$ = "The current text height is "+Textheight$+" mils."
+Height = 11
+if Dimtype > 3 then Height = 13
+if Dimtype < 3 then Height = 13
+
+'Use Form to determine user-input for Font and arrows, etc.
+OpenForm #1,70,Height,"AUTOMATIC DIMENSIONING MACRO by Advanced CAM Technologies", character, okcancel
+AddForm #1, 0, 0, "Please enter the following Font and Snap Setting information:",Print
+AddForm #1, 0, 1, "Current FONT OK to use?", Check, CurFont
+AddForm #1, 0, 2, "Use GRID SNAP?",Check, Gridsnap
+AddForm #1, 0, 3, "Use OBJECT SNAP?",Check, Objectsnap
+AddForm #1, 0, 4, "",Print
+AddForm #1, 0, 5, FontHeight$,Print
+AddForm #1, 0, 6, "Change Text Height?",Check,ChangeText
+AddForm #1, 6, 7, "If YES, enter new height (in mils):         ", Input, TextHeightUser, 1 to 5000
+AddForm #1, 0 , 8, "",Print
+AddForm #1, 0 , 9, "Enter extension line step-off distance (in mils):",Input,Stepoff
+AddForm #1, 0 , 10, "Enter line width to use (in mils):               ",Input, LineWidthUser
+if Dimtype > 3 then AddForm #1, 0 , 11, "Enter Arrow Width (in mils) <0 = no arrow>:      ",Input, AW
+if Dimtype < 3 then AddForm #1, 0 , 11, "Enter Arrow Width (in mils) <0 = no arrow>:      ",Input, AW
+DisplayForm #1
+Canceled% = formCancel(1)
+DeleteForm #1
+
+if Canceled% then
+	print "Default Font and Line settings will be used."
+	Font = 1
+end if
+if Canceled% then return
+
+if CurFont = 0 then print "You did not approve the current font. Exit macro to change font."
+if CurFont = 0 then goto 820
+
+'Change Text Height
+if ChangeText = 1 then TextHeight = TextHeightUser
+
+'Set arrow height
+If Dimtype > 3 then AW = AW/2
+If Dimtype < 3 then AW = AW/2
+
+'Set line width
+If Linewidth = LineWidthUser then return
+
+'Check line width apertures
+For Ap = 1000 to 1050
+	Setdcode@ Ap
+	If Dcodeshape! < 1 then
+		gosub 813
+	end if
+	If Dcodesizex! = Linewidth then
+		gosub 813
+	end if
+Next
+return
+
+813
+Setdcode@ Ap
+Currentap = Ap
+Return
+
+820
+OK_Cancel "OK to EXIT? ",OK
+If OK = 0 then gosub 825
+Clearmarkers@
+setgridsnap@ 0
+setsnap@ 0
+setsnapdist@ 12
+end@
+end
+
+825
+if CurFont = 0 then goto 810
+if CurFont = 1 then goto 100
+return
+
+'SUBROUTINES BEGIN:	
+
+830
+textcapheight@ Textheight
+textjust@ Justification
+textfitting@ 0
+textangle@ 0
+textmirror@ 0
+textvertical@ 0
+If Datumdir = 1 then textangle@ 9000
+If Datumdir = 2 then textangle@ 0
+addtext@ LocX#,LocY#,0,0,dim$
+Return
+
+840
+CoordX# = mouseposx!
+CoordY# = mouseposy!
+If Marker = 1 then Msize = Markersize * 2
+If Marker > 1 then Msize = Markersize
+
+842
+Addmarker@ Marker,CoordX#,CoordY#,Msize
+Getmousepos@ "Button 1 to MOVE, Button 2 to ACCEPT!"
+If Button! = 1 then goto 840
+If Button! = 2 then Return
+Goto 840
+
+end@
+end
+
+860
+Decimals = Decimals + 1
+Ok_cancel "Do another?",OK
+if OK = 1 then goto 100
+goto 820
+
+880
+Select Case LayType
+	Case 4
+		print_msg "Layer",Lay2,"is a GRAPHIC Layer"
+		Delay 1000
+	Case 6
+		print_msg "Layer",Lay2,"is a BORDER Layer"
+		Delay 1000
+	Case 7
+		print_msg "Layer",Lay2,"is a Top SILKSCREEN Layer"
+		Delay 1000
+	Case 8
+		print_msg "Layer",Lay2,"is a Bottom SILKSCREEN Layer"
+		Delay 1000
+	Case 13
+		print_msg "Layer",Lay2,"is a TEMPORARY Layer"
+		Delay 1000
+	Case 16
+		print_msg "Layer",Lay2,"is a Top REF/DES Layer"
+		Delay 1000
+	Case 17
+		print_msg "Layer",Lay2,"is a Bottom REF/DES Layer"
+		Delay 1000
+end select
+close_msg
+return
+
+900
+LayerG% = 1
+Graphic = layertype!
+Select Case Graphic
+	Case 4,6,7,8,13,16,17
+		'goto 105
+	Case else
+		LayerG% = 0
+end select
+return

@@ -1,0 +1,39 @@
+NAME LAVENIER_3
+#
+#  $Workfile:   lav3.arl  $
+#  $Revision:   1.1  $
+#   $Modtime:   Jun 05 1998 11:37:04  $
+#      $Date:   Jun 05 1998 11:48:02  $
+#     $Owner:   RN $
+#   $Logfile:   Y:/CAM350/dev/lav3.arv  $
+#
+#  Copyright (c) 1998 Advanced CAM Technologies, Inc., all rights reserved.
+#
+# ************************************************************************
+# This ARL file read in Lavenier aperture files.
+# ************************************************************************
+
+FILE_EXTENSION env
+
+HEADER 4
+VERSION 1
+UNIT INCH
+
+# Shape definitions:
+S_ROUND         0
+S_SQUARE        1
+S_RECTANGLE     2
+S_OBLONG        3
+S_OBLONG        4
+S_TARGET        6
+S_THERMAL	7
+
+# Line formats:
+# FMT_SKIPUNTIL +2 *.GBR $skipe
+FMT_ROUND      $dcode   $shape    $xsize    $skip    $skipe
+FMT_SQUARE     $dcode   $shape    $xsize    $skipe
+FMT_TARGET     $dcode   $shape    $xsize    $skipe
+FMT_RECTANGLE  $dcode   $shape    $xsize    $ysize   $skipe
+FMT_OBLONG     $dcode   $shape    $xsize    $ysize   $skipe
+FMT_THERMAL    $dcode   $shape    $od       $id      $skipe
+FMT_SKIPEOF    0

@@ -1,0 +1,40 @@
+'
+'  $Workfile:   simple2.scr  $
+'  $Revision:   1.1  $
+'   $Modtime:   May 26 1998 09:44:40  $
+'      $Date:   May 26 1998 15:44:32  $
+'     $Owner:   RN $
+'   $Logfile:   Y:/CAM350/dev/simple2.scv  $
+'
+'  Copyright (c) 1998 - 2001 Innoveda, Inc., all rights reserved.
+'
+
+' File name is SIMPLE2.SCR
+' Version 1.1, November 1995
+setnewfile@
+
+50 ok_cancel "This macro will compute your age", OK
+if OK=1 then goto 100
+if OK=0 then end
+
+100 Input "Enter the current year ", Year
+if Year < 1900 then goto 200
+Input "Enter the year you were born ", yearborn
+if yearborn < 1900 then goto 200
+age=Year-yearborn
+print "Your current age is ", age
+ok_cancel "Do you want to count the years?", ok
+if OK=1 then goto 250
+if OK=0 then end
+
+200 print "The year must be 19xx"
+goto 100
+
+250 for count=1 to age
+ print_msg "Years lived: ", count
+   delay 100
+ next
+print "Pretty old huh!"
+goto 50
+
+end

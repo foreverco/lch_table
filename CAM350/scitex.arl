@@ -1,0 +1,33 @@
+NAME SCITEX
+#
+#  $Workfile:   scitex.arl  $
+#  $Revision:   1.1  $
+#   $Modtime:   Jun 05 1998 11:37:06  $
+#      $Date:   Jun 05 1998 11:48:10  $
+#     $Owner:   RN $
+#   $Logfile:   Y:/CAM350/dev/scitex.arv  $
+#
+#  Copyright (c) 1998 Advanced CAM Technologies, Inc., all rights reserved.
+#
+
+# *******************************************
+# This is the start of the SCITEX Aperture Rule File.
+
+FILE_EXTENSION apt
+
+VERSION 1
+UNIT MIL
+
+# Shape definitions:
+S_ROUND		DRAW
+S_SQUARE	SQUARE
+S_RECTANGLE	RECTANGLE
+S_THERMAL	THERMAL
+
+# Line formats:
+FMT_SKIPUNTIL +0 STN DCODE SHAPE $skipe
+FMT_ROUND	$skip  D$dcode  $shape  $xsize  $skipe
+FMT_SQUARE	$skip  D$dcode  $shape  $xsize  $skipe
+FMT_RECTANGLE	$skip  D$dcode  $shape  $xsize  $skip  $ysize  $skipe
+FMT_THERMAL	$skip  D$dcode  $shape  $od  $skip  $id  $skipe
+# FMT_CUSTOM      $skip  D$dcode  UNIQUE  $skipe 

@@ -1,0 +1,21 @@
+NAME  VeriBest2
+
+#**********************************************
+# This ARL file is for VeriBest CAD aperture files.
+
+FILE_EXTENSION map
+
+VERSION 1
+UNIT  INCH
+
+# Shape definitions
+S_ROUND        Round
+S_SQUARE       Square
+S_RECTANGLE    Rectangle
+
+# Line formats:
+FMT_SKIP       #  $skipe 
+FMT_ROUND      D$dcode   $shape    $xsize    $skipe
+FMT_SQUARE     D$dcode   $shape    $xsize    $skipe
+FMT_RECTANGLE  D$dcode   $shape    $xsize    $ysize   $skipe
+
